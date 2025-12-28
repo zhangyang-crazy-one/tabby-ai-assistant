@@ -1,0 +1,55 @@
+.command-suggestion {
+    background: var(--ai-bg-primary);
+    border: 1px solid var(--ai-border);
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-width: 600px;
+    margin: 0.5rem auto;
+}
+
+.suggestion-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--ai-bg-secondary);
+    border-bottom: 1px solid var(--ai-border);
+}
+
+.suggestion-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.suggestion-item {
+    padding: 1rem;
+    border-bottom: 1px solid var(--ai-border);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.suggestion-item:hover {
+    background-color: var(--ai-bg-secondary);
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-command {
+    font-family: monospace;
+    margin-bottom: 0.5rem;
+}
+
+.suggestion-confidence {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.confidence-bar {
+    height: 4px;
+    background: var(--ai-primary);
+    border-radius: 2px;
+}

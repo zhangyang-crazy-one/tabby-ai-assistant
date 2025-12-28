@@ -1,0 +1,65 @@
+<div class="chat-message"
+     [ngClass]="{
+         'user-message': isUserMessage(),
+         'assistant-message': isAssistantMessage(),
+         'system-message': isSystemMessage(),
+         'grouped': isGrouped,
+         'with-avatar': showAvatar
+     }"
+     (click)="onMessageClick()">
+
+    <!-- 头像 -->
+    <div *ngIf="showAvatar" class="message-avatar">
+        <div *ngIf="isUserMessage()" class="avatar user">
+            <i class="icon-user"></i>
+        </div>
+        <div *ngIf="isAssistantMessage()" class="avatar assistant">
+            <i class="icon-bot"></i>
+        </div>
+        <div *ngIf="isSystemMessage()" class="avatar system">
+            <i class="icon-info"></i>
+        </div>
+    </div>
+
+    <!-- 消息内容 -->
+    <div class="message-content">
+        <div class="message-bubble">
+            <!-- 用户消息 -->
+            <div *ngIf="isUserMessage()" class="message-text">
+                {{ message.content }}
+            </div>
+
+            <!-- AI消息 -->
+            <div *ngIf="isAssistantMessage()" class="message-text ai-response">
+                <pre>{{ message.content }}</pre>
+            </div>
+
+            <!-- 系统消息 -->
+            <div *ngIf="isSystemMessage()" class="message-text system">
+                <i class="icon-warning"></i>
+                {{ message.content }}
+            </div>
+
+            <!-- 操作按钮（仅AI消息显示） -->
+            <div *ngIf="isAssistantMessage()" class="message-actions">
+                <button class="action-btn" (click)="copyMessage()" title="复制">
+                    <i class="icon-copy"></i>
+                </button>
+                <button class="action-btn" (click)="regenerateResponse()" title="重新生成">
+                    <i class="icon-refresh"></i>
+                </button>
+                <button class="action-btn" (click)="markAsHelpful()" title="有用">
+                    <i class="icon-thumbs-up"></i>
+                </button>
+                <button class="action-btn" (click)="markAsNotHelpful()" title="无用">
+                    <i class="icon-thumbs-down"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 时间戳 -->
+        <div *ngIf="showTimestamp" class="message-time">
+            {{ formatTime(message.timestamp) }}
+        </div>
+    </div>
+</div>

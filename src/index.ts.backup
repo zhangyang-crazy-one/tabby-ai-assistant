@@ -1,0 +1,165 @@
+import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
+
+// Tabby modules
+import TabbyCoreModule, { ToolbarButtonProvider, ConfigProvider, HotkeyProvider } from 'tabby-core';
+import TabbyTerminalModule from 'tabby-terminal';
+import { SettingsTabProvider } from 'tabby-settings';
+
+// Core Services
+import { AiAssistantService } from './services/core/ai-assistant.service';
+import { AiProviderManagerService } from './services/core/ai-provider-manager.service';
+import { ConfigProviderService } from './services/core/config-provider.service';
+import { LoggerService } from './services/core/logger.service';
+
+// Providers
+import { BaseAiProvider } from './services/providers/base-provider.service';
+import { OpenAiProviderService } from './services/providers/openai-provider.service';
+import { AnthropicProviderService } from './services/providers/anthropic-provider.service';
+import { MinimaxProviderService } from './services/providers/minimax-provider.service';
+import { GlmProviderService } from './services/providers/glm-provider.service';
+import { OpenAiCompatibleProviderService } from './services/providers/openai-compatible.service';
+
+// Security Services
+import { SecurityValidatorService } from './services/security/security-validator.service';
+import { RiskAssessmentService } from './services/security/risk-assessment.service';
+import { PasswordManagerService } from './services/security/password-manager.service';
+import { ConsentManagerService } from './services/security/consent-manager.service';
+
+// Chat Services
+import { ChatSessionService } from './services/chat/chat-session.service';
+import { ChatHistoryService } from './services/chat/chat-history.service';
+import { CommandGeneratorService } from './services/chat/command-generator.service';
+
+// Terminal Services
+import { CommandAnalyzerService } from './services/terminal/command-analyzer.service';
+import { ContextMenuService } from './services/terminal/context-menu.service';
+import { HotkeyService } from './services/terminal/hotkey.service';
+
+// Tabby Providers (enabled for proper integration)
+
+// Components
+import { ChatInterfaceComponent } from './components/chat/chat-interface.component';
+import { ChatMessageComponent } from './components/chat/chat-message.component';
+import { ChatInputComponent } from './components/chat/chat-input.component';
+import { ChatSettingsComponent } from './components/chat/chat-settings.component';
+
+import { AiSettingsTabComponent } from './components/settings/ai-settings-tab.component';
+import { ProviderConfigComponent } from './components/settings/provider-config.component';
+import { SecuritySettingsComponent } from './components/settings/security-settings.component';
+import { GeneralSettingsComponent } from './components/settings/general-settings.component';
+
+import { RiskConfirmDialogComponent } from './components/security/risk-confirm-dialog.component';
+import { PasswordPromptComponent } from './components/security/password-prompt.component';
+import { ConsentDialogComponent } from './components/security/consent-dialog.component';
+
+import { CommandSuggestionComponent } from './components/terminal/command-suggestion.component';
+import { CommandPreviewComponent } from './components/terminal/command-preview.component';
+import { AiToolbarButtonComponent } from './components/terminal/ai-toolbar-button.component';
+
+import { LoadingSpinnerComponent } from './components/common/loading-spinner.component';
+import { ErrorMessageComponent } from './components/common/error-message.component';
+
+// Tabby Integration Providers (enabled for proper integration)
+import { AiToolbarButtonProvider } from './providers/tabby/ai-toolbar-button.provider';
+import { AiSettingsTabProvider } from './providers/tabby/ai-settings-tab.provider';
+import { AiConfigProvider } from './providers/tabby/ai-config.provider';
+import { AiHotkeyProvider } from './providers/tabby/ai-hotkey.provider';
+
+@NgModule({
+    imports: [
+        CommonModule,
+        FormsModule,
+        TabbyCoreModule,  // Enabled for Tabby integration
+        TabbyTerminalModule,  // Required for terminal integration
+        NgbModule
+    ],
+    providers: [
+        // Core Services
+        AiAssistantService,
+        AiProviderManagerService,
+        ConfigProviderService,
+        LoggerService,
+
+        // AI Providers
+        OpenAiProviderService,
+        AnthropicProviderService,
+        MinimaxProviderService,
+        GlmProviderService,
+        OpenAiCompatibleProviderService,
+
+        // Security Services
+        SecurityValidatorService,
+        RiskAssessmentService,
+        PasswordManagerService,
+        ConsentManagerService,
+
+        // Chat Services
+        ChatSessionService,
+        ChatHistoryService,
+        CommandGeneratorService,
+
+        // Terminal Services
+        CommandAnalyzerService,
+        ContextMenuService,
+        HotkeyService,
+
+        // Tabby Integration Providers (enabled for proper integration)
+        { provide: ToolbarButtonProvider, useClass: AiToolbarButtonProvider, multi: true },
+        { provide: SettingsTabProvider, useClass: AiSettingsTabProvider, multi: true },
+        { provide: ConfigProvider, useClass: AiConfigProvider, multi: true },
+        { provide: HotkeyProvider, useClass: AiHotkeyProvider, multi: true },
+        // { provide: TabContextMenuItemProvider, useClass: AiContextMenuProvider, multi: true }
+    ],
+    declarations: [
+        // Chat Components
+        ChatInterfaceComponent,
+        ChatMessageComponent,
+        ChatInputComponent,
+        ChatSettingsComponent,
+
+        // Settings Components
+        AiSettingsTabComponent,
+        ProviderConfigComponent,
+        SecuritySettingsComponent,
+        GeneralSettingsComponent,
+
+        // Security Components
+        RiskConfirmDialogComponent,
+        PasswordPromptComponent,
+        ConsentDialogComponent,
+
+        // Terminal Components
+        CommandSuggestionComponent,
+        CommandPreviewComponent,
+        AiToolbarButtonComponent,
+
+        // Common Components
+        LoadingSpinnerComponent,
+        ErrorMessageComponent
+    ],
+    entryComponents: [
+        ChatInterfaceComponent,
+        RiskConfirmDialogComponent,
+        PasswordPromptComponent,
+        ConsentDialogComponent,
+        CommandSuggestionComponent,
+        CommandPreviewComponent
+    ]
+})
+export default class AiAssistantModule {
+    constructor(
+        private app: any,
+        private aiService: AiAssistantService,
+        private config: ConfigProviderService
+    ) {
+        // Wait for Tabby to be ready
+        if (this.app && this.app.ready$) {
+            this.app.ready$.subscribe(() => {
+                this.aiService.initialize();
+            });
+        }
+    }
+}

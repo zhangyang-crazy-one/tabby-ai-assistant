@@ -1,0 +1,161 @@
+/**
+ * AI Assistant 主题系统 - 静态样式
+ * CSS 变量由 ThemeService 动态注入到 <style> 元素
+ * 此文件仅包含主题预览和静态样式
+ */
+
+// ============================================
+// 主题预览方块样式
+// ============================================
+.theme-preview {
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+
+    // 浅色
+    &[data-theme="light"] {
+        background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%) !important;
+        border: 1px solid #e0e0e0 !important;
+    }
+
+    // 深色
+    &[data-theme="dark"] {
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%) !important;
+        border: 1px solid #4a4a4a !important;
+    }
+
+    // 跟随系统
+    &[data-theme="auto"] {
+        background: linear-gradient(135deg, #f5f5f5 50%, #1a1a1a 50%) !important;
+        position: relative;
+
+        &::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 24px;
+            height: 24px;
+            background: linear-gradient(135deg, #fff 50%, #333 50%) !important;
+            border-radius: 50% !important;
+        }
+    }
+
+    // 像素风格
+    &[data-theme="pixel"] {
+        background: #0f380f !important;
+        border: 4px solid #9bbc0f !important;
+        border-radius: 0 !important;
+
+        // 像素网格效果
+        background-image:
+            linear-gradient(90deg, rgba(155, 188, 15, 0.1) 1px, transparent 1px),
+            linear-gradient(rgba(155, 188, 15, 0.1) 1px, transparent 1px) !important;
+        background-size: 8px 8px !important;
+    }
+
+    // 科技风格
+    &[data-theme="tech"] {
+        background: #0a0a0f !important;
+        border: 1px solid #00fff9 !important;
+        box-shadow: 0 0 10px rgba(0, 255, 249, 0.4) !important;
+
+        // 扫描线效果
+        &::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 255, 249, 0.1) 2px,
+                rgba(0, 255, 249, 0.1) 4px
+            ) !important;
+        }
+
+        // 角落装饰
+        &::before {
+            content: '';
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 12px;
+            height: 12px;
+            border-top: 2px solid #00fff9 !important;
+            border-left: 2px solid #00fff9 !important;
+        }
+    }
+
+    &:hover {
+        transform: scale(1.05) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+    }
+
+    &.active {
+        box-shadow: 0 0 0 2px var(--ai-primary, #007bff) !important;
+        transform: scale(1.1) !important;
+    }
+}
+
+// ============================================
+// 主题选择器样式
+// ============================================
+.theme-selector {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+
+    .theme-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        border: 2px solid var(--ai-border, #dee2e6) !important;
+        border-radius: var(--ai-border-radius, 0.375rem) !important;
+        background: var(--ai-bg-primary, #ffffff) !important;
+        cursor: pointer;
+        transition: all 0.2s ease !important;
+
+        &:hover {
+            border-color: var(--ai-primary, #007bff) !important;
+        }
+
+        &.active {
+            border-color: var(--ai-primary, #007bff) !important;
+            background: var(--ai-bg-secondary, #f8f9fa) !important;
+            box-shadow: 0 0 0 2px rgba(var(--ai-primary, #007bff), 0.2) !important;
+        }
+
+        span {
+            font-size: 0.75rem;
+            color: var(--ai-text-primary, #212529) !important;
+        }
+    }
+}
+
+// ============================================
+// 响应式设计
+// ============================================
+@media (max-width: 768px) {
+    .theme-selector {
+        justify-content: center;
+
+        .theme-btn {
+            padding: 0.375rem;
+
+            .theme-preview {
+                width: 48px !important;
+                height: 48px !important;
+            }
+        }
+    }
+}

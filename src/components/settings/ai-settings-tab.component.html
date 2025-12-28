@@ -1,0 +1,144 @@
+<div class="ai-settings-tab">
+    <!-- 头部 -->
+    <div class="settings-header">
+        <div class="header-content">
+            <h2>
+                <i class="fa fa-robot"></i>
+                {{ t.chatInterface.title }}{{ t.settings.title }}
+            </h2>
+            <div class="header-status">
+                <div class="status-indicator" [class.enabled]="isEnabled">
+                    <i class="fa fa-power-off"></i>
+                    <span>{{ isEnabled ? t.common.enabled : t.common.disabled }}</span>
+                </div>
+                <div class="provider-info" *ngIf="isEnabled">
+                    <i class="fa fa-cloud"></i>
+                    <span>{{ t.advancedSettings.currentProvider }}: {{ currentProvider }}</span>
+                </div>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn-icon" (click)="toggleEnabled()" [title]="isEnabled ? t.common.disabled : t.common.enabled">
+                <i [class]="isEnabled ? 'fa fa-pause' : 'fa fa-play'"></i>
+            </button>
+            <button class="btn-icon" (click)="refreshProviderStatus()" [title]="t.general.shortcutGenerate">
+                <i class="fa fa-refresh"></i>
+            </button>
+            <button class="btn-icon" (click)="exportConfig()" [title]="t.chatInterface.exportChat">
+                <i class="fa fa-download"></i>
+            </button>
+            <button class="btn-icon" (click)="importConfig()" [title]="t.common.add">
+                <i class="fa fa-upload"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 标签页导航 -->
+    <div class="settings-tabs" *ngIf="isEnabled">
+        <div *ngFor="let tab of tabs"
+             class="tab-item"
+             [class.active]="activeTab === tab.id"
+             [attr.data-tab]="tab.id"
+             (click)="switchTab(tab.id)">
+            <i [class]="tab.icon"></i>
+            <span>{{ t.settings?.[tab.labelKey.split('.')[1]] || tab.labelKey }}</span>
+        </div>
+    </div>
+
+    <!-- 内容区域 -->
+    <div class="settings-content" *ngIf="isEnabled">
+        <!-- 基本设置 -->
+        <div *ngIf="activeTab === 'general'" class="tab-content">
+            <app-general-settings (providerChanged)="switchProvider($event)"></app-general-settings>
+        </div>
+
+        <!-- AI提供商设置 -->
+        <div *ngIf="activeTab === 'providers'" class="tab-content">
+            <app-provider-config [providerStatus]="providerStatus" (refreshStatus)="refreshProviderStatus()"
+                (switchProvider)="switchProvider($event)">
+            </app-provider-config>
+        </div>
+
+        <!-- 上下文管理设置 -->
+        <div *ngIf="activeTab === 'context'" class="tab-content">
+            <app-context-settings></app-context-settings>
+        </div>
+
+        <!-- 安全设置 -->
+        <div *ngIf="activeTab === 'security'" class="tab-content">
+            <app-security-settings></app-security-settings>
+        </div>
+
+        <!-- 聊天设置 -->
+        <div *ngIf="activeTab === 'chat'" class="tab-content">
+            <app-chat-settings></app-chat-settings>
+        </div>
+
+        <!-- 高级设置 -->
+        <div *ngIf="activeTab === 'advanced'" class="tab-content">
+            <div class="advanced-settings">
+                <h3>{{ t.advancedSettings.title }}</h3>
+
+                <!-- 配置验证 -->
+                <div class="settings-section">
+                    <h4>{{ t.advancedSettings.configManagement }}</h4>
+                    <button class="btn btn-primary" (click)="validateConfig()">
+                        <i class="fa fa-check"></i>
+                        {{ t.advancedSettings.validateConfig }}
+                    </button>
+                    <button class="btn btn-warning" (click)="resetToDefaults()">
+                        <i class="fa fa-refresh"></i>
+                        {{ t.advancedSettings.resetDefaults }}
+                    </button>
+                </div>
+
+                <!-- 日志设置 -->
+                <div class="settings-section">
+                    <h4>{{ t.advancedSettings.logSettings }}</h4>
+                    <div class="log-level-selector">
+                        <label>{{ t.advancedSettings.logLevel }}</label>
+                        <select class="form-control" [(ngModel)]="config.logLevel"
+                            (change)="config.setLogLevel(config.logLevel)">
+                            <option value="debug">{{ t.advancedSettings.logLevels.debug }}</option>
+                            <option value="info">{{ t.advancedSettings.logLevels.info }}</option>
+                            <option value="warn">{{ t.advancedSettings.logLevels.warn }}</option>
+                            <option value="error">{{ t.advancedSettings.logLevels.error }}</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 系统信息 -->
+                <div class="settings-section">
+                    <h4>{{ t.advancedSettings.systemInfo }}</h4>
+                    <div class="system-info">
+                        <div class="info-item">
+                            <label>{{ t.advancedSettings.pluginVersion }}:</label>
+                            <span>{{ pluginVersion }}</span>
+                        </div>
+                        <div class="info-item">
+                            <label>{{ t.advancedSettings.supportedProviders }}:</label>
+                            <span>{{ providerStatus.count }}</span>
+                        </div>
+                        <div class="info-item">
+                            <label>{{ t.advancedSettings.currentProvider }}:</label>
+                            <span>{{ currentProvider }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 禁用提示 -->
+    <div class="disabled-message" *ngIf="!isEnabled">
+        <div class="message-content">
+            <i class="fa fa-pause-circle fa-3x"></i>
+            <h3>{{ t.chatInterface.title }} {{ t.common.disabled }}</h3>
+            <p>{{ t.general.enableAssistantDesc }}</p>
+            <button class="btn btn-primary" (click)="toggleEnabled()">
+                <i class="fa fa-play"></i>
+                {{ t.general.enableAssistant }}
+            </button>
+        </div>
+    </div>
+</div>

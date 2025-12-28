@@ -1,0 +1,77 @@
+.error-message {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid;
+    margin: 0.5rem 0;
+
+    &.error {
+        background-color: rgba(220, 53, 69, 0.1);
+        border-color: var(--ai-danger);
+        color: var(--ai-danger);
+    }
+
+    &.warning {
+        background-color: rgba(255, 193, 7, 0.1);
+        border-color: var(--ai-warning);
+        color: #856404;
+    }
+
+    &.info {
+        background-color: rgba(23, 162, 184, 0.1);
+        border-color: var(--ai-info);
+        color: var(--ai-info);
+    }
+
+    &.success {
+        background-color: rgba(40, 167, 69, 0.1);
+        border-color: var(--ai-success);
+        color: var(--ai-success);
+    }
+}
+
+.error-icon {
+    flex-shrink: 0;
+    font-size: 1.25rem;
+}
+
+.error-content {
+    flex: 1;
+
+    h4 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    p {
+        margin: 0;
+        line-height: 1.5;
+    }
+
+    .error-details {
+        margin-top: 0.5rem;
+        opacity: 0.8;
+    }
+}
+
+.error-close {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    border-radius: 0.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+
+    &:hover {
+        opacity: 1;
+    }
+}

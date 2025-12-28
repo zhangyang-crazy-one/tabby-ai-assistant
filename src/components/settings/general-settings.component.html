@@ -1,0 +1,123 @@
+<div class="general-settings">
+    <h3>{{ t.general.title }}</h3>
+
+    <!-- 启用状态 -->
+    <div class="settings-section">
+        <h4>{{ t.security.accessControl }}</h4>
+        <div class="form-check">
+            <input type="checkbox" id="enabled" [(ngModel)]="isEnabled" (change)="updateEnabled(isEnabled)">
+            <label for="enabled">
+                <strong>{{ t.general.enableAssistant }}</strong>
+                <p class="form-description">{{ t.general.enableAssistantDesc }}</p>
+            </label>
+        </div>
+    </div>
+
+    <!-- 默认提供商 -->
+    <div class="settings-section">
+        <div class="section-header">
+            <h4>{{ t.general.defaultProvider }}</h4>
+            <span class="section-info">
+                {{ translate._('general.providerCount', { count: availableProviders.length }) }}
+                <strong>{{ config.getProviderConfig(selectedProvider)?.displayName || t.providerNames[selectedProvider] || selectedProvider }}</strong>
+            </span>
+        </div>
+        <div class="provider-selector">
+            <div class="providers-grid">
+                <div *ngFor="let provider of availableProviders" class="provider-card"
+                    [class.selected]="selectedProvider === provider.name"
+                    (click)="updateDefaultProvider(provider.name)">
+                    <div class="provider-header">
+                        <i class="fa" [ngClass]="provider.isLocal ? 'fa-server' : 'fa-cloud'"></i>
+                        <h5>{{ t.providerNames[provider.name] || provider.displayName }}</h5>
+                        <span class="selection-indicator" *ngIf="selectedProvider === provider.name">
+                            <i class="fa fa-check-circle"></i>
+                        </span>
+                    </div>
+                    <div class="provider-body">
+                        <p class="provider-desc">{{ provider.description || t.providers.notConfigured }}</p>
+                        <div class="provider-meta">
+                            <ng-container *ngIf="provider.isLocal; else cloudStatus">
+                                <span class="status-badge" [style.color]="getLocalProviderStatus(provider.name).color">
+                                    <i class="fa" [ngClass]="getLocalProviderStatus(provider.name).icon"></i>
+                                    {{ getLocalProviderStatus(provider.name).text }}
+                                </span>
+                            </ng-container>
+                            <ng-template #cloudStatus>
+                                <span class="status-badge" [style.color]="getProviderStatus(provider.name).color">
+                                    <i class="fa" [ngClass]="getProviderStatus(provider.name).icon"></i>
+                                    {{ getProviderStatus(provider.name).text }}
+                                </span>
+                            </ng-template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 界面设置 -->
+    <div class="settings-section">
+        <h4>{{ t.settings.title }}</h4>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>{{ t.general.language }}</label>
+                <select class="form-control" [(ngModel)]="language" (change)="updateLanguage(language)">
+                    <option *ngFor="let lang of languages" [value]="lang.value">
+                        {{ lang.flag }} {{ lang.label }}
+                    </option>
+                </select>
+            </div>
+
+            <div class="form-group theme-group">
+                <label>{{ t.general.theme }}</label>
+                <div class="theme-selector">
+                    <button *ngFor="let themeOption of themes" class="theme-btn"
+                        [class.active]="theme === themeOption.value" (click)="updateTheme(themeOption.value)" type="button">
+                        <div class="theme-preview" [attr.data-theme]="themeOption.value"></div>
+                        <span>{{ themeOption.label }}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 快捷键提示 -->
+    <div class="settings-section">
+        <h4>{{ t.general.shortcuts }}</h4>
+        <div class="hotkey-list">
+            <div class="hotkey-item">
+                <div class="hotkey-info">
+                    <strong>{{ t.general.shortcutOpenChat }}</strong>
+                    <p class="form-description">{{ t.general.shortcutOpenChatDesc }}</p>
+                </div>
+                <div class="hotkey-keys">
+                    <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>A</kbd>
+                </div>
+            </div>
+            <div class="hotkey-item">
+                <div class="hotkey-info">
+                    <strong>{{ t.general.shortcutGenerate }}</strong>
+                    <p class="form-description">{{ t.general.shortcutGenerateDesc }}</p>
+                </div>
+                <div class="hotkey-keys">
+                    <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>G</kbd>
+                </div>
+            </div>
+            <div class="hotkey-item">
+                <div class="hotkey-info">
+                    <strong>{{ t.general.shortcutExplain }}</strong>
+                    <p class="form-description">{{ t.general.shortcutExplainDesc }}</p>
+                </div>
+                <div class="hotkey-keys">
+                    <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd>
+                </div>
+            </div>
+        </div>
+        <p class="hotkey-tip">
+            <i class="fa fa-info-circle"></i>
+            {{ t.general.shortcutTip }}
+        </p>
+    </div>
+</div>

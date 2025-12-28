@@ -1,0 +1,20 @@
+:host {
+    display: inline-block;
+}
+
+button {
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: none;
+    background: #007bff;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: background-color 0.2s;
+}
+
+button:hover {
+    background: #0056b3;
+}

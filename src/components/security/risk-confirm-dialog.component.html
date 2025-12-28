@@ -1,0 +1,83 @@
+<div class="risk-confirm-dialog">
+    <!-- 头部 -->
+    <div class="dialog-header">
+        <div class="risk-indicator" [style.color]="getRiskLevelColor()">
+            <i [class]="getRiskLevelIcon()"></i>
+            <span>{{ getRiskLevelText() }}</span>
+        </div>
+        <button type="button" class="close-button" (click)="cancel()">
+            <i class="fa fa-times"></i>
+        </button>
+    </div>
+
+    <!-- 内容 -->
+    <div class="dialog-content">
+        <!-- 风险提示 -->
+        <div class="risk-warning" [ngClass]="isHighRisk() ? 'high-risk' : 'medium-risk'">
+            <div class="warning-icon">
+                <i [class]="getRiskLevelIcon()"></i>
+            </div>
+            <div class="warning-text">
+                <h4>安全警告</h4>
+                <p>此命令被识别为{{ getRiskLevelText() }}，请仔细确认后再执行。</p>
+            </div>
+        </div>
+
+        <!-- 命令信息 -->
+        <div class="command-info">
+            <div class="info-section">
+                <label>将要执行的命令:</label>
+                <div class="command-display">
+                    <code>{{ command }}</code>
+                    <button class="btn-copy" (click)="navigator.clipboard.writeText(command)" title="复制">
+                        <i class="fa fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <label>命令解释:</label>
+                <p class="explanation">{{ explanation }}</p>
+            </div>
+
+            <!-- 安全建议 -->
+            <div class="info-section" *ngIf="suggestions.length > 0">
+                <label>安全建议:</label>
+                <ul class="suggestions-list">
+                    <li *ngFor="let suggestion of suggestions">
+                        <i class="fa fa-lightbulb-o"></i>
+                        <span>{{ suggestion }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 额外警告（高风险） -->
+        <div *ngIf="isHighRisk()" class="high-risk-warning">
+            <div class="warning-box">
+                <i class="fa fa-exclamation-triangle"></i>
+                <div class="warning-content">
+                    <strong>⚠️ 重要提示</strong>
+                    <p *ngIf="riskLevel === 'critical'">
+                        此命令可能导致系统损坏或数据丢失，请在执行前备份重要数据！
+                    </p>
+                    <p *ngIf="riskLevel === 'high'">
+                        此命令将修改系统设置或删除文件，请确保您了解命令的作用。
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部按钮 -->
+    <div class="dialog-footer">
+        <button type="button" class="btn btn-secondary" (click)="cancel()">
+            <i class="fa fa-times"></i>
+            取消
+        </button>
+        <button type="button" class="btn btn-danger" [ngClass]="{ 'btn-critical': isHighRisk() }" (click)="confirm()">
+            <i [class]="isHighRisk() ? 'fa fa-exclamation-triangle' : 'fa fa-check'"></i>
+            {{ isHighRisk() ? '仍要执行' : '确认执行' }}
+        </button>
+    </div>
+</div>

@@ -1,0 +1,184 @@
+.chat-input-container {
+    padding: 1rem;
+    background-color: var(--ai-bg-secondary);
+}
+
+/* 输入区域 */
+.input-wrapper {
+    position: relative;
+    margin-bottom: 0.75rem;
+
+    .chat-textarea {
+        width: 100%;
+        min-height: 44px;
+        max-height: 120px;
+        padding: 0.75rem 1rem;
+        padding-right: 4rem; // 为字符计数留出空间
+        border: 2px solid var(--ai-border);
+        border-radius: 0.75rem;
+        background-color: var(--ai-bg-primary);
+        color: var(--ai-text-primary);
+        font-family: inherit;
+        font-size: 14px;
+        line-height: 1.5;
+        resize: none;
+        transition: all 0.2s;
+        overflow-y: hidden; // 初始隐藏滚动条
+
+        &:focus {
+            outline: none;
+            border-color: var(--ai-primary);
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.15);
+        }
+
+        &:disabled {
+            background-color: var(--ai-bg-secondary);
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        &::placeholder {
+            color: var(--ai-secondary);
+            opacity: 0.8;
+        }
+    }
+
+    .char-counter {
+        position: absolute;
+        bottom: 0.5rem;
+        right: 0.75rem;
+        font-size: 0.75rem;
+        color: var(--ai-secondary);
+        background-color: var(--ai-bg-primary);
+        padding: 0.125rem 0.375rem;
+        border-radius: 0.25rem;
+
+        &.warning {
+            color: var(--ai-warning);
+        }
+
+        &.error {
+            color: var(--ai-danger);
+            font-weight: 600;
+        }
+    }
+}
+
+/* 操作按钮 */
+.input-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+
+    .btn-icon {
+        width: 40px;
+        height: 40px;
+        border: none;
+        background: transparent;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: var(--ai-secondary);
+
+        &:hover {
+            background-color: var(--ai-border);
+            color: var(--ai-text-primary);
+        }
+
+        .icon-clear {
+            font-size: 1.125rem;
+        }
+    }
+
+    .btn-send {
+        min-width: 100px;
+        height: 40px;
+        padding: 0 1rem;
+        border: none;
+        border-radius: 0.5rem;
+        background-color: var(--ai-primary);
+        color: white;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+
+        &:hover:not(:disabled) {
+            background-color: #0069d9;
+            transform: translateY(-1px);
+        }
+
+        &:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .icon-send {
+            font-size: 1rem;
+        }
+
+        .btn-text {
+            font-size: 0.875rem;
+        }
+    }
+}
+
+/* 帮助提示 */
+.input-hints {
+    margin-top: 0.5rem;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+
+    .hint-item {
+        font-size: 0.75rem;
+        color: var(--ai-secondary);
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+
+        kbd {
+            padding: 0.125rem 0.375rem;
+            background-color: var(--ai-bg-primary);
+            border: 1px solid var(--ai-border);
+            border-radius: 0.25rem;
+            font-size: 0.7rem;
+            font-family: monospace;
+        }
+
+        .icon-warning {
+            color: var(--ai-warning);
+            font-size: 0.875rem;
+        }
+    }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .chat-input-container {
+        padding: 0.75rem;
+    }
+
+    .input-actions {
+        .btn-send {
+            min-width: 80px;
+
+            .btn-text {
+                display: none;
+            }
+        }
+    }
+
+    .input-hints {
+        .hint-item {
+            font-size: 0.7rem;
+        }
+    }
+}

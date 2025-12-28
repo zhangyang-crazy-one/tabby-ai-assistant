@@ -1,0 +1,61 @@
+<div class="command-preview" *ngIf="command">
+    <div class="preview-header">
+        <h4>
+            <i class="fa fa-terminal"></i>
+            命令预览
+        </h4>
+        <button class="btn-close" (click)="close()">
+            <i class="fa fa-times"></i>
+        </button>
+    </div>
+
+    <div class="preview-content">
+        <!-- 风险级别 -->
+        <div class="risk-indicator" [ngClass]="'risk-' + riskLevel.toLowerCase()">
+            <i [class]="getRiskIcon()"></i>
+            <span>{{ getRiskText() }}</span>
+        </div>
+
+        <!-- 命令 -->
+        <div class="command-section">
+            <label>将要执行的命令:</label>
+            <div class="command-display">
+                <code>{{ command.command }}</code>
+                <button class="btn-copy" (click)="copyCommand()" title="复制">
+                    <i class="fa fa-copy"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 解释 -->
+        <div class="explanation-section">
+            <label>命令解释:</label>
+            <p>{{ command.explanation }}</p>
+        </div>
+
+        <!-- 置信度 -->
+        <div class="confidence-section" *ngIf="command.confidence">
+            <label>AI置信度:</label>
+            <div class="confidence-meter">
+                <div class="confidence-bar" [style.width.%]="command.confidence * 100"></div>
+                <span class="confidence-text">{{ (command.confidence * 100).toFixed(0) }}%</span>
+            </div>
+        </div>
+
+        <!-- 替代方案 -->
+        <div class="alternatives-section" *ngIf="command.alternatives && command.alternatives.length > 0">
+            <label>替代方案:</label>
+            <div class="alternatives-list">
+                <div *ngFor="let alt of command.alternatives" class="alternative-item" (click)="selectAlternative(alt)">
+                    <code>{{ alt.command }}</code>
+                    <span class="alt-confidence">{{ (alt.confidence * 100).toFixed(0) }}%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="preview-footer">
+        <button class="btn btn-secondary" (click)="close()">取消</button>
+        <button class="btn btn-primary" (click)="execute()">执行命令</button>
+    </div>
+</div>

@@ -1,0 +1,50 @@
+
+> tabby-ai-assistant@1.0.0 test
+> jest integration-tests/api-integration.test.ts --silent=false
+
+FAIL integration-tests/api-integration.test.ts (12.559 s)
+  GLM API Integration Tests
+    √ should connect to GLM API successfully (490 ms)
+    × should handle API errors gracefully (467 ms)
+    × should generate command from natural language (474 ms)
+  OpenAI API Integration Tests
+    √ should test OpenAI API connectivity (10032 ms)
+
+  ● GLM API Integration Tests › should handle API errors gracefully
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 401
+    Received: undefined
+
+    [0m [90m 103 |[39m             console[33m.[39mlog([32m'✅ 错误处理测试通过'[39m)[33m;[39m
+     [90m 104 |[39m             console[33m.[39mlog([32m'捕获到预期错误:'[39m[33m,[39m error[33m.[39mmessage)[33m;[39m
+    [31m[1m>[22m[39m[90m 105 |[39m             expect(error[33m.[39mresponse[33m?[39m[33m.[39mstatus)[33m.[39mtoBe([35m401[39m)[33m;[39m
+     [90m     |[39m                                            [31m[1m^[22m[39m
+     [90m 106 |[39m         }
+     [90m 107 |[39m     }[33m,[39m [35m30000[39m)[33m;[39m
+     [90m 108 |[39m[0m
+
+      at Object.<anonymous> (integration-tests/api-integration.test.ts:105:44)
+
+  ● GLM API Integration Tests › should generate command from natural language
+
+    expect(received).toBeDefined()
+
+    Received: undefined
+
+    [0m [90m 134 |[39m
+     [90m 135 |[39m             expect(response[33m.[39mstatus)[33m.[39mtoBe([35m200[39m)[33m;[39m
+    [31m[1m>[22m[39m[90m 136 |[39m             expect(response[33m.[39mdata[33m.[39mcontent[33m?[39m[33m.[39m[[35m0[39m][33m?[39m[33m.[39mtext)[33m.[39mtoBeDefined()[33m;[39m
+     [90m     |[39m                                                      [31m[1m^[22m[39m
+     [90m 137 |[39m         } [36mcatch[39m (error[33m:[39m any) {
+     [90m 138 |[39m             console[33m.[39merror([32m'❌ 命令生成测试失败:'[39m[33m,[39m error[33m.[39mmessage)[33m;[39m
+     [90m 139 |[39m             [36mthrow[39m error[33m;[39m[0m
+
+      at Object.<anonymous> (integration-tests/api-integration.test.ts:136:54)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 2 passed, 4 total
+Snapshots:   0 total
+Time:        13.256 s
+Ran all test suites matching /integration-tests\\api-integration.test.ts/i.

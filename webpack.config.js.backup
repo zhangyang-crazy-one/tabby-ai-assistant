@@ -1,0 +1,57 @@
+const path = require('path');
+const webpack = require('webpack');
+
+module.exports = {
+    mode: 'production',
+    entry: './src/index.ts',
+    output: {
+        path: path.resolve(__dirname, 'dist'),
+        filename: 'index.js',
+        libraryTarget: 'umd',
+        devtoolModuleFilenameTemplate: 'webpack-tabby-ai-assistant:///[resource-path]',
+    },
+    resolve: {
+        extensions: ['.ts', '.js'],
+        alias: {
+            '@': path.resolve(__dirname, 'src')
+        },
+        fallback: {
+            'os': false,
+            'path': false,
+            'crypto': false,
+            'stream': false,
+            'util': false
+        }
+    },
+    module: {
+        rules: [
+            {
+                test: /\.ts$/,
+                use: [
+                    { loader: 'ts-loader' },
+                    { loader: 'angular2-template-loader' }
+                ],
+                exclude: /node_modules/
+            },
+            {
+                test: /\.(html|css|scss)$/,
+                use: ['raw-loader']
+            }
+        ]
+    },
+    externals: [
+        'tabby-core',
+        'tabby-terminal',
+        'tabby-settings',
+        '@angular/core',
+        '@angular/common',
+        '@angular/forms',
+        '@ng-bootstrap/ng-bootstrap',
+        'rxjs'
+    ],
+    plugins: [
+        new webpack.DefinePlugin({
+            'process.env.NODE_ENV': JSON.stringify('production')
+        })
+    ]
+};

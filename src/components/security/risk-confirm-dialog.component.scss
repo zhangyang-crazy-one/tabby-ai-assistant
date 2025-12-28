@@ -1,0 +1,363 @@
+.risk-confirm-dialog {
+    background-color: var(--ai-bg-primary);
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* 头部 */
+.dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--ai-border);
+
+    .risk-indicator {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 1.125rem;
+        font-weight: 600;
+
+        i {
+            font-size: 1.5rem;
+        }
+
+        span {
+            color: var(--ai-text-primary);
+        }
+    }
+
+    .close-button {
+        width: 32px;
+        height: 32px;
+        border: none;
+        background: transparent;
+        border-radius: 0.375rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: var(--ai-secondary);
+
+        &:hover {
+            background-color: var(--ai-border);
+            color: var(--ai-text-primary);
+        }
+    }
+}
+
+/* 内容 */
+.dialog-content {
+    padding: 1.5rem;
+    max-height: 60vh;
+    overflow-y: auto;
+
+    /* 风险警告 */
+    .risk-warning {
+        display: flex;
+        gap: 1rem;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid;
+
+        &.medium-risk {
+            background-color: rgba(255, 193, 7, 0.1);
+            border-color: var(--ai-warning);
+            color: #856404;
+
+            .warning-icon i {
+                color: var(--ai-warning);
+            }
+        }
+
+        &.high-risk {
+            background-color: rgba(253, 126, 20, 0.1);
+            border-color: var(--ai-risk-high);
+            color: var(--ai-risk-high);
+
+            .warning-icon i {
+                color: var(--ai-risk-high);
+            }
+        }
+
+        .warning-icon {
+            flex-shrink: 0;
+            font-size: 2rem;
+        }
+
+        .warning-text {
+            flex: 1;
+
+            h4 {
+                margin: 0 0 0.5rem 0;
+                font-size: 1.125rem;
+                font-weight: 600;
+            }
+
+            p {
+                margin: 0;
+                font-size: 0.875rem;
+                line-height: 1.5;
+            }
+        }
+    }
+
+    /* 命令信息 */
+    .command-info {
+        .info-section {
+            margin-bottom: 1.5rem;
+
+            &:last-child {
+                margin-bottom: 0;
+            }
+
+            label {
+                display: block;
+                font-weight: 600;
+                margin-bottom: 0.5rem;
+                color: var(--ai-text-primary);
+                font-size: 0.875rem;
+            }
+
+            .command-display {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                background-color: var(--ai-bg-secondary);
+                border: 1px solid var(--ai-border);
+                border-radius: 0.375rem;
+                padding: 0.75rem;
+
+                code {
+                    flex: 1;
+                    font-family: 'Courier New', Courier, monospace;
+                    font-size: 0.875rem;
+                    color: var(--ai-text-primary);
+                    word-break: break-all;
+                }
+
+                .btn-copy {
+                    width: 28px;
+                    height: 28px;
+                    border: none;
+                    background: transparent;
+                    border-radius: 0.25rem;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    color: var(--ai-secondary);
+
+                    &:hover {
+                        background-color: var(--ai-border);
+                        color: var(--ai-text-primary);
+                    }
+                }
+            }
+
+            .explanation {
+                margin: 0;
+                padding: 0.75rem;
+                background-color: var(--ai-bg-secondary);
+                border: 1px solid var(--ai-border);
+                border-radius: 0.375rem;
+                font-size: 0.875rem;
+                line-height: 1.6;
+                color: var(--ai-text-primary);
+            }
+
+            .suggestions-list {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+
+                li {
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 0.5rem;
+                    padding: 0.5rem;
+                    margin-bottom: 0.5rem;
+                    background-color: var(--ai-bg-secondary);
+                    border-radius: 0.375rem;
+                    border: 1px solid var(--ai-border);
+
+                    &:last-child {
+                        margin-bottom: 0;
+                    }
+
+                    i {
+                        color: var(--ai-info);
+                        font-size: 1rem;
+                        margin-top: 0.125rem;
+                    }
+
+                    span {
+                        flex: 1;
+                        font-size: 0.875rem;
+                        line-height: 1.5;
+                        color: var(--ai-text-primary);
+                    }
+                }
+            }
+        }
+    }
+
+    /* 高风险警告 */
+    .high-risk-warning {
+        margin-top: 1.5rem;
+
+        .warning-box {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+            background-color: rgba(220, 53, 69, 0.1);
+            border: 1px solid var(--ai-danger);
+            border-radius: 0.5rem;
+            color: var(--ai-danger);
+
+            i {
+                font-size: 1.5rem;
+                color: var(--ai-danger);
+            }
+
+            .warning-content {
+                flex: 1;
+
+                strong {
+                    display: block;
+                    margin-bottom: 0.5rem;
+                    font-size: 1rem;
+                }
+
+                p {
+                    margin: 0;
+                    font-size: 0.875rem;
+                    line-height: 1.6;
+                }
+            }
+        }
+    }
+}
+
+/* 底部按钮 */
+.dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1.5rem;
+    border-top: 1px solid var(--ai-border);
+    background-color: var(--ai-bg-secondary);
+    border-radius: 0 0 0.5rem 0.5rem;
+
+    .btn {
+        padding: 0.5rem 1.5rem;
+        border: none;
+        border-radius: 0.375rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+
+        &.btn-secondary {
+            background-color: var(--ai-secondary);
+            color: white;
+
+            &:hover {
+                background-color: #5a6268;
+            }
+        }
+
+        &.btn-danger {
+            background-color: var(--ai-danger);
+            color: white;
+
+            &:hover {
+                background-color: #c82333;
+            }
+        }
+
+        &.btn-critical {
+            background-color: var(--ai-danger);
+            color: white;
+            animation: pulse 2s infinite;
+
+            &:hover {
+                animation: none;
+                background-color: #bd2130;
+            }
+        }
+    }
+}
+
+/* 动画 */
+@keyframes pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+    }
+
+    50% {
+        box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+    }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .risk-confirm-dialog {
+        max-width: 100%;
+        margin: 0;
+        border-radius: 0;
+    }
+
+    .dialog-header {
+        padding: 1rem;
+
+        .risk-indicator {
+            font-size: 1rem;
+
+            i {
+                font-size: 1.25rem;
+            }
+        }
+    }
+
+    .dialog-content {
+        padding: 1rem;
+
+        .risk-warning {
+            .warning-icon {
+                font-size: 1.5rem;
+            }
+
+            .warning-text {
+                h4 {
+                    font-size: 1rem;
+                }
+
+                p {
+                    font-size: 0.8rem;
+                }
+            }
+        }
+    }
+
+    .dialog-footer {
+        padding: 1rem;
+        flex-direction: column-reverse;
+
+        .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+}

@@ -1,0 +1,22 @@
+<div class="consent-dialog">
+    <div class="dialog-header">
+        <i class="fa fa-question-circle"></i>
+        <h3>确认执行</h3>
+    </div>
+    <div class="dialog-content">
+        <p>确定要执行此命令吗？</p>
+        <div class="command-preview">
+            <code>{{ command }}</code>
+        </div>
+        <div class="checkbox-group">
+            <label>
+                <input type="checkbox" [(ngModel)]="rememberChoice">
+                记住我的选择（30天内不再提示）
+            </label>
+        </div>
+    </div>
+    <div class="dialog-footer">
+        <button class="btn btn-secondary" (click)="cancel()">取消</button>
+        <button class="btn btn-primary" (click)="confirm()">确认执行</button>
+    </div>
+</div>

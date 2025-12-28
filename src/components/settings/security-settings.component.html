@@ -1,0 +1,82 @@
+<div class="security-settings">
+    <h3>{{ t.security.title }}</h3>
+
+    <!-- 密码保护 -->
+    <div class="settings-section">
+        <h4>{{ t.security.accessControl }}</h4>
+        <div class="form-group">
+            <label class="form-label">
+                <input type="checkbox" [(ngModel)]="settings.enablePasswordProtection">
+                {{ t.security.passwordProtection }}
+            </label>
+            <small class="form-text text-muted">
+                {{ t.security.passwordProtectionDesc }}
+            </small>
+        </div>
+        <div class="form-group" *ngIf="settings.enablePasswordProtection">
+            <label class="form-label">{{ t.security.setPassword }}</label>
+            <input type="password" class="form-control" [(ngModel)]="password" [placeholder]="t.security.passwordPlaceholder">
+        </div>
+    </div>
+
+    <!-- 风险评估 -->
+    <div class="settings-section">
+        <h4>{{ t.security.riskAssessment }}</h4>
+        <div class="form-group">
+            <label class="form-label">
+                <input type="checkbox" [(ngModel)]="settings.enableRiskAssessment">
+                {{ t.security.riskAssessment }}
+            </label>
+            <small class="form-text text-muted">
+                {{ t.security.riskAssessmentDesc }}
+            </small>
+        </div>
+        <div class="form-group">
+            <label class="form-label">{{ t.security.defaultRiskLevel }}</label>
+            <select class="form-control" [(ngModel)]="settings.defaultRiskLevel">
+                <option value="low">{{ t.security.riskLow }}</option>
+                <option value="medium">{{ t.security.riskMedium }}</option>
+                <option value="high">{{ t.security.riskHigh }}</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- 用户授权 -->
+    <div class="settings-section">
+        <h4>{{ t.security.userConsent }}</h4>
+        <div class="form-group">
+            <label class="form-label">
+                <input type="checkbox" [(ngModel)]="settings.enableConsentPersistence">
+                {{ t.security.rememberConsent }}
+            </label>
+            <small class="form-text text-muted">
+                {{ t.security.rememberConsentDesc }} {{ settings.consentExpiryDays }} {{ t.security.consentExpiryDays }}
+            </small>
+        </div>
+    </div>
+
+    <!-- 危险命令模式 -->
+    <div class="settings-section">
+        <h4>{{ t.security.dangerousPatterns }}</h4>
+        <div class="pattern-list">
+            <div *ngFor="let pattern of dangerousPatterns; let i = index" class="pattern-item">
+                <code>{{ pattern }}</code>
+                <button type="button" class="btn-icon" (click)="removeDangerousPattern(i)">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="form-group add-pattern">
+            <input type="text" class="form-control" [(ngModel)]="newPattern" [placeholder]="t.security.patternPlaceholder">
+            <button type="button" class="btn btn-secondary" (click)="addDangerousPattern(newPattern)">
+                {{ t.security.addPattern }}
+            </button>
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="settings-actions">
+        <button class="btn btn-primary" (click)="saveSettings()">{{ t.common.save }}</button>
+        <button class="btn btn-outline" (click)="resetToDefaults()">{{ t.security.resetDefaults }}</button>
+    </div>
+</div>

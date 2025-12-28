@@ -1,0 +1,382 @@
+/* Provider Configuration Styles */
+.provider-config {
+    max-width: 1100px;
+
+    h3 {
+        margin: 0 0 1.5rem 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--ai-text-primary);
+    }
+}
+
+/* 分组样式 */
+.provider-section {
+    margin-bottom: 32px;
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+
+        i {
+            font-size: 20px;
+            color: var(--ai-primary);
+        }
+
+        h4 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--ai-text-primary);
+        }
+
+        .section-desc {
+            color: var(--ai-text-secondary);
+            font-size: 13px;
+            opacity: 0.8;
+        }
+    }
+
+    &.local .section-header i {
+        color: #00bcd4;
+    }
+}
+
+/* 卡片网格 */
+.providers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+/* 卡片样式 */
+.provider-card {
+    background: var(--ai-bg-secondary);
+    border: 1px solid var(--ai-border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+
+    &:hover {
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    &.configured {
+        border-color: var(--ai-primary);
+        border-width: 2px;
+    }
+
+    &.expanded {
+        grid-column: 1 / -1;
+
+        .card-body {
+            display: block;
+        }
+    }
+}
+
+/* 卡片头部 */
+.card-header {
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    cursor: pointer;
+    gap: 12px;
+    transition: background-color 0.2s;
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+
+    .provider-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        background: rgba(0, 123, 255, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+
+        i {
+            font-size: 20px;
+            color: var(--ai-primary);
+        }
+
+        &.local {
+            background: rgba(0, 188, 212, 0.15);
+
+            i {
+                color: #00bcd4;
+            }
+        }
+    }
+
+    .provider-info {
+        flex: 1;
+        min-width: 0;
+
+        h5 {
+            margin: 0 0 4px 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--ai-text-primary);
+        }
+
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+    }
+
+    .expand-icon {
+        color: var(--ai-text-secondary);
+        font-size: 14px;
+        padding: 8px;
+    }
+}
+
+/* 状态徽章 */
+.status-badge {
+    display: inline-block;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--ai-text-secondary);
+
+    &.active {
+        background: rgba(76, 175, 80, 0.2);
+        color: #4caf50;
+    }
+}
+
+/* 在线状态 */
+.online-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+
+    i {
+        font-size: 8px;
+    }
+}
+
+/* 卡片内容 */
+.card-body {
+    padding: 0 16px 16px;
+    border-top: 1px solid var(--ai-border);
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 配置表单 */
+.config-form {
+    padding-top: 16px;
+
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .form-group {
+        margin-bottom: 16px;
+
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: var(--ai-text-primary);
+            font-size: 0.875rem;
+
+            .required {
+                color: var(--ai-danger);
+                margin-left: 4px;
+            }
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--ai-border);
+            border-radius: 8px;
+            background-color: var(--ai-bg-primary);
+            color: var(--ai-text-primary);
+            font-size: 0.875rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+
+            &:focus {
+                outline: none;
+                border-color: var(--ai-primary);
+                box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.15);
+            }
+
+            &::placeholder {
+                color: var(--ai-text-secondary);
+                opacity: 0.6;
+            }
+        }
+    }
+
+    .toggle-switch {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--ai-primary);
+        }
+
+        label {
+            margin: 0;
+            font-weight: normal;
+            font-size: 14px;
+        }
+    }
+}
+
+/* 操作按钮 */
+.form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--ai-border);
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+
+        &.btn-primary {
+            background-color: var(--ai-primary);
+            color: white;
+
+            &:hover {
+                background-color: #0056b3;
+            }
+        }
+
+        &.btn-secondary {
+            background-color: var(--ai-text-secondary);
+            color: white;
+
+            &:hover {
+                background-color: #5a6268;
+            }
+        }
+
+        &.btn-info {
+            background-color: #00bcd4;
+            color: white;
+
+            &:hover {
+                background-color: #00acc1;
+            }
+        }
+    }
+}
+
+/* 输入框密码显示切换 */
+.input-with-toggle {
+    position: relative;
+    display: flex;
+    align-items: center;
+
+    .form-control {
+        padding-right: 40px;
+    }
+
+    .btn-toggle-visibility {
+        position: absolute;
+        right: 8px;
+        background: transparent;
+        border: none;
+        color: var(--ai-text-secondary);
+        cursor: pointer;
+        padding: 4px 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        &:hover {
+            color: var(--ai-text-primary);
+        }
+    }
+}
+
+/* 表单验证状态 */
+.form-control {
+    &.is-valid {
+        border-color: var(--ai-success, #4caf50);
+    }
+
+    &.is-invalid {
+        border-color: var(--ai-warning, #ff9800);
+    }
+}
+
+.validation-feedback {
+    font-size: 0.85em;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    &.valid {
+        color: var(--ai-success, #4caf50);
+    }
+
+    &.invalid {
+        color: var(--ai-warning, #ff9800);
+    }
+
+    i {
+        font-size: 0.9em;
+    }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .providers-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .config-form .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .form-actions {
+        flex-direction: column;
+
+        .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+}

@@ -1,0 +1,133 @@
+.context-settings {
+    max-width: 800px;
+
+    h3 {
+        margin: 0 0 1.5rem 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--ai-text-primary);
+    }
+}
+
+.provider-context-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--ai-bg-tertiary, #f0f4f8);
+    border: 1px solid var(--ai-primary, #3b82f6);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 0.9em;
+    color: var(--ai-text-secondary, #64748b);
+
+    i {
+        color: var(--ai-primary, #3b82f6);
+        font-size: 1.1em;
+    }
+}
+
+.setting-section {
+    margin-bottom: 24px;
+    padding: 16px;
+    background: var(--ai-bg-secondary);
+    border: 1px solid var(--ai-border);
+    border-radius: 12px;
+
+    .section-header h4 {
+        margin: 0 0 16px 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--ai-text-primary);
+    }
+}
+
+.setting-item {
+    margin-bottom: 16px;
+
+    label {
+        display: block;
+        font-weight: 500;
+        margin-bottom: 6px;
+        color: var(--ai-text-primary);
+    }
+
+    .setting-desc {
+        font-size: 0.85em;
+        color: var(--ai-text-secondary);
+        margin-top: 4px;
+        margin-bottom: 0;
+    }
+
+    .form-control, .form-range {
+        width: 100%;
+        max-width: 300px;
+        padding: 8px 12px;
+        border: 1px solid var(--ai-border);
+        border-radius: 8px;
+        background: var(--ai-bg-primary);
+        color: var(--ai-text-primary);
+    }
+
+    .form-range {
+        padding: 0;
+        height: 6px;
+        cursor: pointer;
+    }
+}
+
+.toggle-switch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--ai-primary);
+        cursor: pointer;
+    }
+
+    label {
+        margin: 0;
+        font-weight: normal;
+        cursor: pointer;
+    }
+}
+
+.form-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+
+    .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s;
+
+        &.btn-primary {
+            background-color: var(--ai-primary);
+            color: white;
+
+            &:hover {
+                background-color: var(--ai-primary-hover);
+            }
+        }
+
+        &.btn-secondary {
+            background-color: var(--ai-secondary);
+            color: white;
+
+            &:hover {
+                filter: brightness(0.9);
+            }
+        }
+    }
+}

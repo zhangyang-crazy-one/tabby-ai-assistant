@@ -1,0 +1,15 @@
+<div class="error-message" [ngClass]="type">
+    <div class="error-icon">
+        <i [class]="getIconClass()"></i>
+    </div>
+    <div class="error-content">
+        <h4 *ngIf="title">{{ title }}</h4>
+        <p>{{ message }}</p>
+        <div *ngIf="details" class="error-details">
+            <small>{{ details }}</small>
+        </div>
+    </div>
+    <button *ngIf="dismissible" class="error-close" (click)="onDismiss()">
+        <i class="icon-close"></i>
+    </button>
+</div>

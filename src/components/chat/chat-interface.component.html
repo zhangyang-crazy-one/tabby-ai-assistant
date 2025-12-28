@@ -1,0 +1,127 @@
+<div class="ai-chat-interface">
+    <!-- 头部 -->
+    <div class="ai-chat-header">
+        <div class="header-left">
+            <h2 class="ai-title">
+                <i class="fa fa-comments"></i>
+                {{ t.chatInterface.title }}
+            </h2>
+            <span class="provider-badge">
+                <i class="fa fa-cloud"></i>
+                {{ currentProvider }}
+            </span>
+        </div>
+        <div class="header-actions">
+            <button class="btn-icon" (click)="switchProvider()" [title]="t.chatInterface.switchProvider">
+                <i class="fa fa-exchange"></i>
+            </button>
+            <button class="btn-icon" (click)="exportChat()" [title]="t.chatInterface.exportChat">
+                <i class="fa fa-download"></i>
+            </button>
+            <button class="btn-icon danger" (click)="clearChat()" [title]="t.chatInterface.clearChat">
+                <i class="fa fa-trash"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 消息列表包装器 (用于滚动按钮定位) -->
+    <div class="chat-content-wrapper">
+        <!-- 消息列表 -->
+        <div class="ai-chat-container" #chatContainer (scroll)="onScroll($event)">
+            <div class="messages-wrapper">
+                <!-- 消息分组 -->
+                <ng-container *ngFor="let message of messages; let i = index">
+                    <!-- 检查是否需要显示日期分隔线 -->
+                    <div *ngIf="i === 0 || !isSameDay(message.timestamp, messages[i-1].timestamp)"
+                        class="date-separator">
+                        <span class="date-text">
+                            {{ isToday(message.timestamp) ? t.common.today : message.timestamp.toLocaleDateString('zh-CN') }}
+                        </span>
+                    </div>
+
+                    <!-- 消息项 -->
+                    <div class="message-item" [ngClass]="{
+                             'user-message': message.role === 'user',
+                             'assistant-message': message.role === 'assistant',
+                             'system-message': message.role === 'system'
+                         }">
+                        <!-- 头像 -->
+                        <div class="message-avatar" *ngIf="showAvatars">
+                            <div *ngIf="message.role === 'user'" class="avatar user">
+                                <i class="fa fa-user"></i>
+                            </div>
+                            <div *ngIf="message.role === 'assistant'" class="avatar assistant">
+                                <i class="fa fa-robot"></i>
+                            </div>
+                            <div *ngIf="message.role === 'system'" class="avatar system">
+                                <i class="fa fa-info-circle"></i>
+                            </div>
+                        </div>
+
+                        <!-- 消息内容 -->
+                        <div class="message-content">
+                            <div class="message-bubble">
+                                <!-- 用户消息 -->
+                                <div *ngIf="message.role === 'user'" class="message-text">
+                                    {{ message.content }}
+                                </div>
+
+                                <!-- AI消息 -->
+                                <div *ngIf="message.role === 'assistant'" class="message-text ai-response">
+                                    <pre>{{ message.content }}</pre>
+                                </div>
+
+                                <!-- 系统消息 -->
+                                <div *ngIf="message.role === 'system'" class="message-text system">
+                                    <i class="fa fa-exclamation-triangle"></i>
+                                    {{ message.content }}
+                                </div>
+                            </div>
+
+                            <!-- 消息时间 -->
+                            <div class="message-time" *ngIf="showTimestamps">
+                                {{ formatTimestamp(message.timestamp) }}
+                            </div>
+                        </div>
+                    </div>
+                </ng-container>
+
+                <!-- 加载指示器 -->
+                <div *ngIf="isLoading" class="loading-indicator">
+                    <div class="typing-indicator">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                    <span class="loading-text">{{ t.chatInterface.thinking }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 滚动按钮 (在容器外部以便固定定位) -->
+        <button *ngIf="showScrollTop" class="scroll-btn scroll-top" (click)="scrollToTop()" title="滚动到顶部">
+            <i class="fa fa-chevron-up"></i>
+        </button>
+        <button *ngIf="showScrollBottom" class="scroll-btn scroll-bottom" (click)="scrollToBottom()" title="滚动到底部">
+            <i class="fa fa-chevron-down"></i>
+        </button>
+    </div>
+
+    <!-- 输入区域 -->
+    <div class="ai-chat-input">
+        <app-chat-input (send)="onSendMessage($event)" [disabled]="isLoading">
+        </app-chat-input>
+    </div>
+
+    <!-- 提示信息 -->
+    <div class="chat-tips" *ngIf="messages.length === 1">
+        <div class="tip-item">
+            <i class="fa fa-lightbulb-o"></i>
+            <span>{{ t.chatInterface.tipCommand }}</span>
+        </div>
+        <div class="tip-item">
+            <i class="fa fa-keyboard-o"></i>
+            <span>{{ t.chatInterface.tipShortcut }}</span>
+        </div>
+    </div>
+</div>

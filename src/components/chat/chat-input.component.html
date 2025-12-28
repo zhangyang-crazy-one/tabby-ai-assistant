@@ -1,0 +1,46 @@
+<div class="chat-input-container">
+    <!-- 输入区域 -->
+    <div class="input-wrapper">
+        <textarea #textInput class="chat-textarea" [(ngModel)]="inputValue" [placeholder]="placeholder"
+            [disabled]="disabled" (keydown)="onKeydown($event)" (input)="onInput($event)"
+            (compositionstart)="onCompositionStart()" (compositionend)="onCompositionEnd()" rows="1">
+        </textarea>
+
+        <!-- 字符计数 -->
+        <div class="char-counter" [ngClass]="{
+            'warning': isNearLimit() && !isOverLimit(),
+            'error': isOverLimit()
+        }">
+            {{ getCharCount() }} / {{ getCharLimit() }}
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="input-actions">
+        <!-- 清空按钮 -->
+        <button *ngIf="inputValue && !disabled" class="btn-icon" (click)="clear()" title="清空">
+            <i class="fa fa-times"></i>
+        </button>
+
+        <!-- 发送按钮 -->
+        <button class="btn-send" [disabled]="!inputValue.trim() || disabled || isOverLimit()" (click)="submit()"
+            title="发送 (Enter)">
+            <i class="fa fa-paper-plane"></i>
+            <span class="btn-text">发送</span>
+        </button>
+    </div>
+
+    <!-- 帮助提示 -->
+    <div class="input-hints">
+        <span class="hint-item">
+            <kbd>Enter</kbd> 发送
+        </span>
+        <span class="hint-item">
+            <kbd>Shift + Enter</kbd> 换行
+        </span>
+        <span class="hint-item" *ngIf="isNearLimit()">
+            <i class="fa fa-exclamation-triangle"></i>
+            接近字符限制
+        </span>
+    </div>
+</div>

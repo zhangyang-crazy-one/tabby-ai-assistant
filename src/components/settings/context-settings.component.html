@@ -1,0 +1,87 @@
+<div class="context-settings">
+    <h3>{{ t.contextSettings?.title || '上下文管理' }}</h3>
+
+    <!-- 自动压缩开关 -->
+    <div class="setting-section">
+        <div class="section-header">
+            <h4>{{ t.contextSettings?.autoCompact || '自动压缩' }}</h4>
+        </div>
+        <div class="setting-item">
+            <label>{{ t.contextSettings?.enableAutoCompact || '启用自动压缩' }}</label>
+            <div class="toggle-switch">
+                <input type="checkbox" id="auto-compact"
+                    [checked]="autoCompactEnabled"
+                    (change)="toggleAutoCompact()">
+                <label for="auto-compact">
+                    {{ autoCompactEnabled ? (t.common?.enabled || '启用') : (t.common?.disabled || '禁用') }}
+                </label>
+            </div>
+            <p class="setting-desc">{{ t.contextSettings?.autoCompactDesc || '当上下文超过阈值时自动压缩历史消息' }}</p>
+        </div>
+    </div>
+
+    <!-- Token 配置 -->
+    <div class="setting-section">
+        <div class="section-header">
+            <h4>{{ t.contextSettings?.tokenConfig || 'Token 配置' }}</h4>
+        </div>
+
+        <!-- 当前供应商上下文信息 -->
+        <div class="provider-context-info">
+            <i class="fa fa-info-circle"></i>
+            <span>{{ t.contextSettings?.currentProviderLimit || '当前供应商上下文限制' }}: {{ activeProviderContextWindow | number }} Token</span>
+        </div>
+
+        <div class="setting-item">
+            <label>{{ t.contextSettings?.maxContextTokens || '最大上下文 Token 数' }}</label>
+            <input type="number" class="form-control" [(ngModel)]="config.maxContextTokens"
+                min="10000" [max]="activeProviderContextWindow" step="10000">
+            <p class="setting-desc">{{ t.contextSettings?.maxContextTokensDesc || '不能超过当前供应商的上下文限制' }}</p>
+        </div>
+
+        <div class="setting-item">
+            <label>{{ t.contextSettings?.reservedOutputTokens || '输出预留 Token 数' }}</label>
+            <input type="number" class="form-control" [(ngModel)]="config.reservedOutputTokens"
+                min="1000" max="32000" step="1000">
+            <p class="setting-desc">{{ t.contextSettings?.reservedOutputTokensDesc || '为 AI 回复预留的 Token 数量' }}</p>
+        </div>
+    </div>
+
+    <!-- 压缩阈值配置 -->
+    <div class="setting-section">
+        <div class="section-header">
+            <h4>{{ t.contextSettings?.thresholdConfig || '压缩阈值' }}</h4>
+        </div>
+
+        <div class="setting-item">
+            <label>{{ t.contextSettings?.pruneThreshold || '裁剪阈值' }}: {{ (config.pruneThreshold * 100).toFixed(0) }}%</label>
+            <input type="range" class="form-range" [(ngModel)]="config.pruneThreshold"
+                min="0.5" max="0.9" step="0.05">
+            <p class="setting-desc">{{ t.contextSettings?.pruneThresholdDesc || '使用率超过此阈值时裁剪冗余内容（默认：70%）' }}</p>
+        </div>
+
+        <div class="setting-item">
+            <label>{{ t.contextSettings?.compactThreshold || '压缩阈值' }}: {{ (config.compactThreshold * 100).toFixed(0) }}%</label>
+            <input type="range" class="form-range" [(ngModel)]="config.compactThreshold"
+                min="0.7" max="0.95" step="0.05">
+            <p class="setting-desc">{{ t.contextSettings?.compactThresholdDesc || '使用率超过此阈值时生成摘要压缩（默认：85%）' }}</p>
+        </div>
+
+        <div class="setting-item">
+            <label>{{ t.contextSettings?.messagesToKeep || '保留消息数' }}</label>
+            <input type="number" class="form-control" [(ngModel)]="config.messagesToKeep"
+                min="1" max="20" step="1">
+            <p class="setting-desc">{{ t.contextSettings?.messagesToKeepDesc || '压缩时始终保留的最近消息数量（默认：3）' }}</p>
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="form-actions">
+        <button class="btn btn-primary" (click)="saveConfig()">
+            <i class="fa fa-save"></i> {{ t.providers?.saveConfig || '保存配置' }}
+        </button>
+        <button class="btn btn-secondary" (click)="resetToDefaults()">
+            <i class="fa fa-undo"></i> {{ t.common?.reset || '重置默认' }}
+        </button>
+    </div>
+</div>

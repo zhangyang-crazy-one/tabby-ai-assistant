@@ -1,0 +1,178 @@
+.chat-message {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+
+    &:hover {
+        opacity: 0.95;
+    }
+
+    &.user-message {
+        flex-direction: row-reverse;
+
+        .message-avatar {
+            .avatar.user {
+                background-color: var(--ai-primary);
+                color: white;
+            }
+        }
+
+        .message-content {
+            .message-bubble {
+                background-color: var(--ai-primary);
+                color: white;
+                border-bottom-right-radius: 0.25rem;
+            }
+        }
+    }
+
+    &.assistant-message {
+        .message-avatar {
+            .avatar.assistant {
+                background-color: var(--ai-success);
+                color: white;
+            }
+        }
+
+        .message-content {
+            .message-bubble {
+                background-color: var(--ai-assistant-message);
+                color: var(--ai-text-primary);
+                border-bottom-left-radius: 0.25rem;
+            }
+        }
+    }
+
+    &.system-message {
+        justify-content: center;
+
+        .message-avatar {
+            .avatar.system {
+                background-color: var(--ai-warning);
+                color: white;
+            }
+        }
+
+        .message-content {
+            .message-bubble {
+                background-color: var(--ai-system-message);
+                color: var(--ai-text-primary);
+                border-radius: 0.5rem;
+                font-style: italic;
+            }
+        }
+    }
+
+    &.grouped {
+        &.user-message,
+        &.assistant-message {
+            .message-avatar {
+                opacity: 0.6;
+            }
+
+            .message-content {
+                .message-bubble {
+                    border-radius: 0.75rem;
+                }
+            }
+        }
+    }
+
+    &.with-avatar {
+        .message-avatar {
+            flex-shrink: 0;
+
+            .avatar {
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1rem;
+            }
+        }
+    }
+}
+
+/* 消息内容 */
+.message-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    max-width: 70%;
+
+    .message-bubble {
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        box-shadow: var(--ai-box-shadow);
+        word-wrap: break-word;
+        position: relative;
+
+        .message-text {
+            margin: 0;
+            line-height: 1.6;
+
+            pre {
+                margin: 0;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                font-family: inherit;
+                font-size: inherit;
+            }
+
+            &.ai-response {
+                white-space: pre-wrap;
+            }
+        }
+
+        /* 操作按钮 */
+        .message-actions {
+            display: flex;
+            gap: 0.25rem;
+            margin-top: 0.5rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+
+            .action-btn {
+                width: 28px;
+                height: 28px;
+                border: none;
+                background: rgba(0, 0, 0, 0.05);
+                border-radius: 0.375rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: all 0.2s;
+                color: var(--ai-secondary);
+
+                &:hover {
+                    background: rgba(0, 0, 0, 0.1);
+                    color: var(--ai-text-primary);
+                }
+            }
+        }
+
+        &:hover .message-actions {
+            opacity: 1;
+        }
+    }
+
+    .message-time {
+        font-size: 0.75rem;
+        opacity: 0.6;
+        padding: 0 0.5rem;
+    }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .chat-message {
+        .message-content {
+            max-width: 85%;
+        }
+    }
+}

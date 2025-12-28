@@ -1,0 +1,23 @@
+<div class="command-suggestion" *ngIf="suggestions.length > 0">
+    <div class="suggestion-header">
+        <i class="fa fa-lightbulb-o"></i>
+        <span>AI命令建议</span>
+        <button class="btn-close" (click)="close()">
+            <i class="fa fa-times"></i>
+        </button>
+    </div>
+    <div class="suggestion-list">
+        <div *ngFor="let suggestion of suggestions" class="suggestion-item" (click)="selectSuggestion(suggestion)">
+            <div class="suggestion-command">
+                <code>{{ suggestion.command }}</code>
+            </div>
+            <div class="suggestion-explanation">
+                {{ suggestion.explanation }}
+            </div>
+            <div class="suggestion-confidence">
+                <span class="confidence-bar" [style.width.%]="suggestion.confidence * 100"></span>
+                <span class="confidence-text">{{ (suggestion.confidence * 100).toFixed(0) }}%</span>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,8 @@
+<button
+    class="btn btn-sm btn-primary"
+    [title]="tooltip"
+    (click)="onClick()"
+>
+    <i class="fas fa-robot"></i>
+    <span class="ms-1" *ngIf="showLabel">{{ label }}</span>
+</button>

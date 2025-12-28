@@ -1,0 +1,198 @@
+<div class="provider-config">
+    <h3>{{ t.providers.title }}</h3>
+
+    <!-- 云端提供商分组 -->
+    <div class="provider-section">
+        <div class="section-header">
+            <i class="fa fa-cloud"></i>
+            <h4>{{ t.providers.cloudProviders }}</h4>
+            <span class="section-desc">{{ t.providers.cloudProvidersDesc }}</span>
+        </div>
+
+        <div class="providers-grid">
+            <div *ngFor="let providerName of Object.keys(cloudProviderTemplates)"
+                 class="provider-card"
+                 [class.configured]="hasConfig(providerName)"
+                 [class.expanded]="expandedProvider === providerName">
+
+                <!-- 卡片头部 -->
+                <div class="card-header" (click)="toggleExpand(providerName)">
+                    <div class="provider-icon" [class.local]="isLocalProvider(providerName)">
+                        <i class="fa" [ngClass]="getProviderIcon(providerName)"></i>
+                    </div>
+                    <div class="provider-info">
+                        <h5>{{ t.providerNames[providerName] || cloudProviderTemplates[providerName].name }}</h5>
+                        <span class="status-badge" [class.active]="configs[providerName]?.enabled">
+                            {{ hasConfig(providerName) ? (configs[providerName]?.enabled ? t.common.enabled : t.common.disabled) : t.common.notConfigured }}
+                        </span>
+                    </div>
+                    <div class="expand-icon">
+                        <i class="fa" [ngClass]="expandedProvider === providerName ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                    </div>
+                </div>
+
+                <!-- 卡片内容（展开时显示） -->
+                <div class="card-body" *ngIf="expandedProvider === providerName">
+                    <div class="config-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>{{ t.providers.displayName }}</label>
+                                <input type="text" class="form-control" [(ngModel)]="configs[providerName].displayName" *ngIf="configs[providerName]">
+                            </div>
+                            <div class="form-group">
+                                <label>{{ t.providers.status }}</label>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" [id]="'enabled-' + providerName"
+                                        [checked]="configs[providerName]?.enabled"
+                                        (change)="toggleProviderEnabled(providerName)">
+                                    <label [for]="'enabled-' + providerName">
+                                        {{ configs[providerName]?.enabled ? t.common.enabled : t.common.disabled }}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div *ngFor="let field of cloudProviderTemplates[providerName].fields" class="form-group">
+                            <label>
+                                {{ t.providers[field.key] || field.label }}
+                                <span *ngIf="isRequired(field)" class="required">*</span>
+                            </label>
+                            <div class="input-with-toggle" *ngIf="configs[providerName] && (getFieldType(field) === 'text' || getFieldType(field) === 'password')">
+                                <input
+                                    [type]="isPasswordField(field) && !isPasswordVisible(providerName, field.key) ? 'password' : 'text'"
+                                    class="form-control"
+                                    [class]="getInputValidationClass(providerName, field.key)"
+                                    [placeholder]="field.placeholder || ''"
+                                    [(ngModel)]="configs[providerName][field.key]">
+                                <button *ngIf="isPasswordField(field)"
+                                        type="button"
+                                        class="btn-toggle-visibility"
+                                        (click)="togglePasswordVisibility(providerName, field.key)">
+                                    <i class="fa" [ngClass]="isPasswordVisible(providerName, field.key) ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                            <!-- API Key 验证提示 -->
+                            <div *ngIf="field.key === 'apiKey' && configs[providerName]?.[field.key]"
+                                 class="validation-feedback"
+                                 [class.valid]="validateApiKeyFormat(providerName, configs[providerName][field.key]).valid"
+                                 [class.invalid]="!validateApiKeyFormat(providerName, configs[providerName][field.key]).valid">
+                                <i class="fa" [ngClass]="validateApiKeyFormat(providerName, configs[providerName][field.key]).valid ? 'fa-check-circle' : 'fa-exclamation-circle'"></i>
+                                {{ validateApiKeyFormat(providerName, configs[providerName][field.key]).message || '格式正确' }}
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button class="btn btn-primary" (click)="saveConfig(providerName)">
+                                <i class="fa fa-save"></i> {{ t.providers.saveConfig }}
+                            </button>
+                            <button class="btn btn-secondary" (click)="testConnection(providerName)">
+                                <i class="fa fa-plug"></i> {{ t.providers.testConnection }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 本地提供商分组 -->
+    <div class="provider-section local">
+        <div class="section-header">
+            <i class="fa fa-server"></i>
+            <h4>{{ t.providers.localProviders }}</h4>
+            <span class="section-desc">{{ t.providers.localProvidersDesc }}</span>
+        </div>
+
+        <div class="providers-grid">
+            <div *ngFor="let providerName of Object.keys(localProviderTemplates)"
+                 class="provider-card"
+                 [class.configured]="hasConfig(providerName)"
+                 [class.expanded]="expandedProvider === providerName">
+
+                <!-- 卡片头部 -->
+                <div class="card-header" (click)="toggleExpand(providerName)">
+                    <div class="provider-icon local">
+                        <i class="fa" [ngClass]="getProviderIcon(providerName)"></i>
+                    </div>
+                    <div class="provider-info">
+                        <h5>{{ t.providerNames[providerName] || localProviderTemplates[providerName].name }}</h5>
+                        <div class="status-row">
+                            <span class="status-badge" [class.active]="configs[providerName]?.enabled">
+                                {{ hasConfig(providerName) ? (configs[providerName]?.enabled ? t.common.enabled : t.common.disabled) : t.common.notConfigured }}
+                            </span>
+                            <!-- 在线状态指示器 -->
+                            <span class="online-status" [style.color]="getLocalStatus(providerName).color">
+                                <i class="fa" [ngClass]="getLocalStatus(providerName).icon"></i>
+                                {{ getLocalStatus(providerName).text }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="expand-icon">
+                        <i class="fa" [ngClass]="expandedProvider === providerName ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                    </div>
+                </div>
+
+                <!-- 卡片内容（展开时显示） -->
+                <div class="card-body" *ngIf="expandedProvider === providerName">
+                    <div class="config-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>{{ t.providers.displayName }}</label>
+                                <input type="text" class="form-control" [(ngModel)]="configs[providerName].displayName" *ngIf="configs[providerName]">
+                            </div>
+                            <div class="form-group">
+                                <label>{{ t.providers.status }}</label>
+                                <div class="toggle-switch">
+                                    <input type="checkbox" [id]="'enabled-' + providerName"
+                                        [checked]="configs[providerName]?.enabled"
+                                        (change)="toggleProviderEnabled(providerName)">
+                                    <label [for]="'enabled-' + providerName">
+                                        {{ configs[providerName]?.enabled ? t.common.enabled : t.common.disabled }}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div *ngFor="let field of localProviderTemplates[providerName].fields" class="form-group">
+                            <label>
+                                {{ t.providers[field.key] || field.label }}
+                                <span *ngIf="isRequired(field)" class="required">*</span>
+                            </label>
+                            <div class="input-with-toggle" *ngIf="configs[providerName] && (getFieldType(field) === 'text' || getFieldType(field) === 'password')">
+                                <input
+                                    [type]="isPasswordField(field) && !isPasswordVisible(providerName, field.key) ? 'password' : 'text'"
+                                    class="form-control"
+                                    [class]="getInputValidationClass(providerName, field.key)"
+                                    [placeholder]="field.placeholder || ''"
+                                    [(ngModel)]="configs[providerName][field.key]">
+                                <button *ngIf="isPasswordField(field)"
+                                        type="button"
+                                        class="btn-toggle-visibility"
+                                        (click)="togglePasswordVisibility(providerName, field.key)">
+                                    <i class="fa" [ngClass]="isPasswordVisible(providerName, field.key) ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                            <!-- API Key 验证提示 -->
+                            <div *ngIf="field.key === 'apiKey' && configs[providerName]?.[field.key]"
+                                 class="validation-feedback"
+                                 [class.valid]="validateApiKeyFormat(providerName, configs[providerName][field.key]).valid"
+                                 [class.invalid]="!validateApiKeyFormat(providerName, configs[providerName][field.key]).valid">
+                                <i class="fa" [ngClass]="validateApiKeyFormat(providerName, configs[providerName][field.key]).valid ? 'fa-check-circle' : 'fa-exclamation-circle'"></i>
+                                {{ validateApiKeyFormat(providerName, configs[providerName][field.key]).message || '格式正确' }}
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button class="btn btn-primary" (click)="saveConfig(providerName)">
+                                <i class="fa fa-save"></i> {{ t.providers.saveConfig }}
+                            </button>
+                            <button class="btn btn-info" (click)="testConnection(providerName)">
+                                <i class="fa fa-wifi"></i> {{ t.providers.detectService }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

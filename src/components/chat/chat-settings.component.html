@@ -1,0 +1,166 @@
+<div class="chat-settings">
+    <h3>{{ t.chatSettings.title }}</h3>
+
+    <!-- 主题设置 -->
+    <div class="settings-section">
+        <h4>{{ t.chatSettings.appearance }}</h4>
+
+        <div class="form-group">
+            <label>{{ t.chatSettings.theme }}</label>
+            <div class="theme-selector">
+                <button *ngFor="let themeOption of themes" class="theme-btn"
+                    [class.active]="settings.theme === themeOption.value" (click)="updateTheme(themeOption.value)" type="button">
+                    <div class="theme-preview" [attr.data-theme]="themeOption.value"></div>
+                    <span>{{ themeOption.label }}</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>{{ t.chatSettings.fontSize }}</label>
+            <div class="font-size-selector">
+                <button
+                    *ngFor="let size of fontSizes"
+                    class="font-size-btn"
+                    [class.active]="settings.fontSize === size"
+                    (click)="updateFontSize(size)">
+                    {{ size }}px
+                </button>
+            </div>
+        </div>
+
+        <div class="form-check compact-mode-check">
+            <input
+                type="checkbox"
+                id="compactMode"
+                [(ngModel)]="settings.compactMode"
+                (change)="toggleCompactMode()">
+            <label for="compactMode">
+                <strong>{{ t.chatSettings.compactMode }}</strong>
+                <span class="option-desc">{{ t.chatSettings.compactModeDesc }}</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- 聊天行为 -->
+    <div class="settings-section">
+        <h4>{{ t.chatSettings.behavior }}</h4>
+
+        <div class="setting-item">
+            <div class="form-check">
+                <input
+                    type="checkbox"
+                    id="enterToSend"
+                    [(ngModel)]="settings.enterToSend"
+                    (change)="saveSetting('ui.enterToSend', settings.enterToSend)">
+                <label for="enterToSend">
+                    <strong>{{ t.chatSettings.enterToSend }}</strong>
+                    <span class="option-desc">{{ t.chatSettings.enterToSendDesc }}</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="setting-item">
+            <div class="form-check">
+                <input
+                    type="checkbox"
+                    id="showTimestamps"
+                    [(ngModel)]="settings.showTimestamps"
+                    (change)="saveSetting('ui.showTimestamps', settings.showTimestamps)">
+                <label for="showTimestamps">
+                    <strong>{{ t.chatSettings.showTimestamps }}</strong>
+                    <span class="option-desc">{{ t.chatSettings.showTimestampsDesc }}</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="setting-item">
+            <div class="form-check">
+                <input
+                    type="checkbox"
+                    id="showAvatars"
+                    [(ngModel)]="settings.showAvatars"
+                    (change)="saveSetting('ui.showAvatars', settings.showAvatars)">
+                <label for="showAvatars">
+                    <strong>{{ t.chatSettings.showAvatars }}</strong>
+                    <span class="option-desc">{{ t.chatSettings.showAvatarsDesc }}</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="setting-item">
+            <div class="form-check">
+                <input
+                    type="checkbox"
+                    id="soundEnabled"
+                    [(ngModel)]="settings.soundEnabled"
+                    (change)="saveSetting('ui.soundEnabled', settings.soundEnabled)">
+                <label for="soundEnabled">
+                    <strong>{{ t.chatSettings.soundEnabled }}</strong>
+                    <span class="option-desc">{{ t.chatSettings.soundEnabledDesc }}</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- 聊天历史 -->
+    <div class="settings-section">
+        <h4>{{ t.chatSettings.history }}</h4>
+
+        <div class="form-check">
+            <input
+                type="checkbox"
+                id="chatHistoryEnabled"
+                [(ngModel)]="settings.chatHistoryEnabled"
+                (change)="saveSetting('chatHistoryEnabled', settings.chatHistoryEnabled)">
+            <label for="chatHistoryEnabled">
+                <strong>{{ t.chatSettings.enableHistory }}</strong>
+                <span class="option-desc">{{ t.chatSettings.enableHistoryDesc }}</span>
+            </label>
+        </div>
+
+        <div class="form-group history-limit" *ngIf="settings.chatHistoryEnabled">
+            <label>{{ t.chatSettings.maxHistory }}</label>
+            <div class="input-with-unit">
+                <input
+                    type="number"
+                    class="form-control"
+                    [(ngModel)]="settings.maxChatHistory"
+                    (change)="saveSetting('maxChatHistory', settings.maxChatHistory)"
+                    min="10"
+                    max="1000"
+                    step="10">
+                <span class="unit">{{ t.chatSettings.maxHistoryUnit }}</span>
+            </div>
+            <small class="form-text">{{ t.chatSettings.autoSaveDesc }}</small>
+        </div>
+
+        <div class="form-check" *ngIf="settings.chatHistoryEnabled">
+            <input
+                type="checkbox"
+                id="autoSaveChat"
+                [(ngModel)]="settings.autoSaveChat"
+                (change)="saveSetting('autoSaveChat', settings.autoSaveChat)">
+            <label for="autoSaveChat">
+                <strong>{{ t.chatSettings.autoSave }}</strong>
+                <span class="option-desc">{{ t.chatSettings.autoSaveDesc }}</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="settings-actions">
+        <button class="btn btn-secondary" (click)="exportSettings()">
+            <i class="fa fa-download"></i>
+            {{ t.chatSettings.exportSettings }}
+        </button>
+        <button class="btn btn-danger" (click)="clearChatHistory()">
+            <i class="fa fa-trash"></i>
+            {{ t.chatSettings.clearHistory }}
+        </button>
+        <button class="btn btn-outline" (click)="resetToDefaults()">
+            <i class="fa fa-undo"></i>
+            {{ t.chatSettings.resetDefaults }}
+        </button>
+    </div>
+</div>
