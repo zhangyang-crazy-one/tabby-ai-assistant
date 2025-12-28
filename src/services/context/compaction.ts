@@ -8,6 +8,7 @@ import {
     PruneResult,
     TruncationResult
 } from '../../types/ai.types';
+import { SummaryService } from './summary.service';
 
 /**
  * 压缩算法实现类
@@ -19,7 +20,10 @@ import {
 export class Compaction {
     private config: ContextConfig;
 
-    constructor(private logger: LoggerService) {
+    constructor(
+        private logger: LoggerService,
+        private summaryService: SummaryService
+    ) {
         this.config = { ...DEFAULT_CONTEXT_CONFIG };
     }
 
@@ -67,20 +71,26 @@ export class Compaction {
         const condenseId = `compact_${Date.now()}`;
 
         try {
-            // 1. 准备摘要输入
-            const summaryInput = this.formatMessagesForSummary(messages);
+            // 使用SummaryService生成AI摘要
+            const summaryResult = await this.summaryService.generateSummary(messages);
+            const summary = summaryResult.summary;
 
-            // 2. 生成摘要（TODO: 调用AI API）
-            const summary = await this.generateSummary(summaryInput, messages);
-
-            // 3. 创建摘要消息
+            // 创建摘要消息，包含元数据
             const summaryMessage: ApiMessage = {
                 role: 'system',
                 content: summary,
                 ts: Date.now(),
                 isSummary: true,
                 condenseId,
-                condenseParent: undefined
+                condenseParent: undefined,
+                summaryMeta: {
+                    originalMessageCount: summaryResult.originalMessageCount,
+                    tokensCost: summaryResult.tokensCost,
+                    compressionRatio: this.summaryService.calculateCompressionRatio(
+                        summaryResult.originalMessageCount,
+                        summary.length
+                    )
+                }
             };
 
             // 4. 标记被压缩的消息
@@ -97,7 +107,8 @@ export class Compaction {
                 condenseId,
                 originalTokens,
                 summaryTokens,
-                tokensSaved
+                tokensSaved,
+                compressionRatio: summaryMessage.summaryMeta?.compressionRatio
             });
 
             return {
@@ -106,7 +117,7 @@ export class Compaction {
                 summary,
                 condenseId,
                 tokensSaved,
-                cost: 0 // TODO: 计算实际API成本
+                cost: summaryResult.tokensCost
             };
 
         } catch (error) {
@@ -301,16 +312,100 @@ export class Compaction {
 
     /**
      * 裁剪复杂内容（工具调用结果等）
+     * 智能裁剪长文本、JSON、代码块
      */
     private pruneComplexContent(message: ApiMessage, content: any[]): ApiMessage & { tokensSaved?: number; partsCompacted?: number } {
-        // TODO: 实现复杂内容的裁剪逻辑
-        // 例如：工具调用结果的格式化、JSON数据的精简等
+        let tokensSaved = 0;
+        let partsCompacted = 0;
+        const originalLength = JSON.stringify(content).length;
+
+        // 处理每个内容块
+        const prunedContent = content.map(block => {
+            // 如果是文本块，尝试智能裁剪
+            if (block.type === 'text' && typeof block.text === 'string') {
+                const prunedText = this.pruneText(block.text, 500);
+                if (prunedText.length < block.text.length) {
+                    tokensSaved += this.estimateTokens(block.text) - this.estimateTokens(prunedText);
+                    partsCompacted++;
+                    return { ...block, text: prunedText };
+                }
+            }
+            // 如果是工具调用结果，尝试精简
+            if (block.type === 'tool_use') {
+                const prunedTool = this.pruneToolResult(block);
+                if (prunedTool !== block) {
+                    partsCompacted++;
+                    return prunedTool;
+                }
+            }
+            return block;
+        });
+
+        // 如果内容类型不对，只返回原内容
+        if (typeof message.content === 'string') {
+            return {
+                ...message,
+                tokensSaved: 0,
+                partsCompacted: 0
+            };
+        }
+
         return {
             ...message,
-            content,
-            tokensSaved: 0,
-            partsCompacted: 0
+            content: prunedContent,
+            tokensSaved,
+            partsCompacted
         };
+    }
+
+    /**
+     * 智能裁剪文本内容
+     */
+    private pruneText(content: string, maxLength: number = 500): string {
+        // 如果内容不超过限制，直接返回
+        if (content.length <= maxLength) {
+            return content;
+        }
+
+        // JSON 内容：保留结构概要
+        if (content.trim().startsWith('{') || content.trim().startsWith('[')) {
+            try {
+                const parsed = JSON.parse(content);
+                const keys = Object.keys(parsed);
+                return `[JSON对象，包含${keys.length}个字段: ${keys.slice(0, 5).join(', ')}${keys.length > 5 ? '...' : ''}]`;
+            } catch {
+                // 非有效 JSON，继续处理
+            }
+        }
+
+        // 代码块：保留头尾
+        if (content.includes('\n') && content.split('\n').length > 10) {
+            const lines = content.split('\n');
+            const head = lines.slice(0, 5).join('\n');
+            const tail = lines.slice(-3).join('\n');
+            return `${head}\n[...省略${lines.length - 8}行...]\n${tail}`;
+        }
+
+        // 普通长文本：截断并添加省略标记
+        return content.substring(0, maxLength) + '\n[...内容已裁剪...]';
+    }
+
+    /**
+     * 精简工具调用结果
+     */
+    private pruneToolResult(block: any): any {
+        // 如果是工具输出块
+        if (block.type === 'tool_result' && block.content) {
+            let content = block.content;
+            if (typeof content === 'string') {
+                // 对长文本结果进行裁剪
+                if (content.length > 1000) {
+                    content = content.substring(0, 500) + '\n[...输出已截断...]';
+                }
+            }
+            return { ...block, content };
+        }
+        return block;
     }
 
     /**
@@ -320,18 +415,6 @@ export class Compaction {
         // 简化实现：假设prune已经处理了消息
         // 实际实现中需要更复杂的逻辑来处理prune结果
         return messages;
-    }
-
-    /**
-     * 格式化消息用于摘要
-     */
-    private formatMessagesForSummary(messages: ApiMessage[]): string {
-        const formattedMessages = messages.map(msg => {
-            const content = this.extractTextContent(msg.content);
-            return `[${msg.role}] ${content}`;
-        });
-
-        return formattedMessages.join('\n---\n');
     }
 
     /**
@@ -350,113 +433,6 @@ export class Compaction {
         }
 
         return '[复杂内容]';
-    }
-
-    /**
-     * 生成摘要（集成AI API）
-     */
-    private async generateSummary(input: string, messages: ApiMessage[]): Promise<string> {
-        try {
-            // TODO: 实现AI摘要生成
-            // 实际实现中应该调用AI API
-
-            // 临时实现：基于规则的智能摘要
-            const messageCount = messages.length;
-            const estimatedTokens = this.calculateTotalTokens(messages);
-
-            // 如果消息数量较少，使用简单摘要
-            if (messageCount < 5) {
-                return this.createSimpleSummary(messages);
-            }
-
-            // 如果消息数量较多，使用智能摘要
-            const intelligentSummary = this.createIntelligentSummary(messages);
-
-            return `【AI摘要】压缩了${messageCount}条消息（约${estimatedTokens}个Token）
-
-${intelligentSummary}
-
---- 上下文压缩完成 ---`;
-
-        } catch (error) {
-            this.logger.error('Failed to generate AI summary', { error });
-            // 降级到本地摘要
-            return this.createFallbackSummary(messages);
-        }
-    }
-
-    /**
-     * 创建简单摘要（适用于短对话）
-     */
-    private createSimpleSummary(messages: ApiMessage[]): string {
-        const userMessages = messages.filter(m => m.role === 'user');
-        const assistantMessages = messages.filter(m => m.role === 'assistant');
-
-        if (userMessages.length === 0) {
-            return '会话摘要：空对话';
-        }
-
-        const firstMessage = this.extractTextContent(userMessages[0].content);
-        const lastMessage = this.extractTextContent(assistantMessages[assistantMessages.length - 1]?.content || '');
-
-        return `【摘要】简短对话：
-用户问题：${firstMessage.substring(0, 80)}${firstMessage.length > 80 ? '...' : ''}
-助手回复：${lastMessage.substring(0, 80)}${lastMessage.length > 80 ? '...' : ''}
-消息总数：${messages.length}条`;
-    }
-
-    /**
-     * 创建降级摘要（当AI API不可用时）
-     */
-    private createFallbackSummary(messages: ApiMessage[]): string {
-        const messageCount = messages.length;
-        const userCount = messages.filter(m => m.role === 'user').length;
-        const assistantCount = messages.filter(m => m.role === 'assistant').length;
-        const totalTokens = this.calculateTotalTokens(messages);
-
-        const summary = [
-            `【压缩摘要】`,
-            `消息统计：${messageCount}条消息（用户${userCount}条，助手${assistantCount}条）`,
-            `Token使用：约${totalTokens}个Token`,
-            ``,
-            `关键内容提取：`
-        ];
-
-        // 提取关键消息
-        const keyMessages = messages
-            .filter(m => m.role === 'user' && this.extractTextContent(m.content).length > 10)
-            .slice(0, 3)
-            .map((m, i) => `  ${i + 1}. ${this.extractTextContent(m.content).substring(0, 60)}...`);
-
-        summary.push(...keyMessages);
-
-        summary.push('', '--- 压缩完成 ---');
-
-        return summary.join('\n');
-    }
-
-    /**
-     * 创建智能摘要（简化版）
-     */
-    private createIntelligentSummary(messages: ApiMessage[]): string {
-        const userMessages = messages.filter(m => m.role === 'user');
-        const assistantMessages = messages.filter(m => m.role === 'assistant');
-
-        let summary = '';
-
-        if (userMessages.length > 0) {
-            summary += `用户发送了${userMessages.length}条消息\n`;
-            summary += `主要问题：${this.extractTextContent(userMessages[0].content).substring(0, 100)}...\n`;
-        }
-
-        if (assistantMessages.length > 0) {
-            summary += `助手回复了${assistantMessages.length}条消息\n`;
-        }
-
-        summary += `会话主题：基于历史消息推断的主题\n`;
-        summary += `关键决策：基于历史消息提取的关键操作\n`;
-
-        return summary;
     }
 
     /**

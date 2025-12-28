@@ -1,19 +1,20 @@
 # Tabby AI Assistant Plugin
 
-一个强大的Tabby终端AI助手插件，支持多AI提供商（OpenAI、Anthropic、Minimax、GLM），提供智能命令生成、解释和安全验证功能。
+一个强大的Tabby终端AI助手插件，支持多AI提供商，提供智能命令生成、解释和安全验证功能。
 
 ## 🌟 特性
 
 ### 核心功能
-- **多AI提供商支持** - 支持OpenAI、Anthropic、Minimax、GLM等多种AI服务
+- **多AI提供商支持** - 支持OpenAI、Anthropic、Minimax、GLM、Ollama、vLLM等
 - **智能命令生成** - 自然语言转终端命令，准确率高
 - **命令解释** - 详细解释命令含义和用法
 - **错误修复** - 自动分析错误并提供修复建议
-- **终端感知** - 实时感知终端状态（当前目录、运行状态、环境变量等）
+- **终端感知** - 实时感知终端状态
+- **智能 Agent 工具调用循环** - 支持多轮工具自动调用，智能终止检测
 
 ### 安全特性
 - **多级风险评估** - 自动识别危险命令（低/中/高/极风险）
-- **用户同意管理** - 30天同意持久化，避免重复确认
+- **用户同意管理** - 30天同意持久化
 - **密码保护** - 高风险命令需要密码验证
 - **安全模式** - 自动阻止极危险操作
 
@@ -25,27 +26,22 @@
 
 ## 🚀 支持的AI提供商
 
-### 1. Minimax (MiniMax-M2)
-- **API端点**: `https://api.minimaxi.com/anthropic`
-- **兼容性**: 完全兼容Anthropic Claude API
-- **特点**: 专为代码和Agent工作流优化
-- **模型**: MiniMax-M2, MiniMax-M2-Stable
+### 云服务提供商
 
-### 2. GLM (ChatGLM-4)
-- **API端点**: `https://open.bigmodel.cn/api/paas/v4/`
-- **兼容性**: OpenAI API格式
-- **特点**: 中文优化，响应速度快
-- **模型**: glm-4, glm-4-air, chatglm4等
+| 提供商 | 默认端点 | 默认模型 | 特点 |
+|--------|---------|---------|------|
+| **OpenAI** | `https://api.openai.com/v1` | GPT-4 | 功能全面，性能稳定 |
+| **Anthropic** | `https://api.anthropic.com` | Claude-3-Sonnet | 安全性高，推理能力强 |
+| **Minimax** | `https://api.minimaxi.com/anthropic` | MiniMax-M2 | 专为代码优化 |
+| **GLM** | `https://open.bigmodel.cn/api/anthropic` | GLM-4.6 | 中文优化 |
 
-### 3. OpenAI
-- **API端点**: `https://api.openai.com/v1/`
-- **模型**: GPT-4, GPT-3.5 Turbo
-- **特点**: 功能全面，性能稳定
+### 本地/自托管提供商
 
-### 4. Anthropic Claude
-- **API端点**: `https://api.anthropic.com/`
-- **模型**: Claude-3系列
-- **特点**: 安全性高，推理能力强
+| 提供商 | 默认端点 | 默认模型 | 特点 |
+|--------|---------|---------|------|
+| **Ollama** | `http://localhost:11434/v1` | llama3.1 | 本地运行，无需API密钥 |
+| **vLLM** | `http://localhost:8000/v1` | Llama-3.1-8B | 高性能推理框架 |
+| **OpenAI Compatible** | `http://localhost:11434/v1` | gpt-3.5-turbo | 兼容LocalAI等 |
 
 ## 📦 安装
 
@@ -67,7 +63,7 @@ npm run build
 ### 1. 设置API密钥
 1. 打开Tabby设置 → AI助手
 2. 选择AI提供商
-3. 输入API密钥
+3. 输入API密钥（本地服务如Ollama无需密钥）
 4. 选择模型
 5. 保存设置
 
@@ -121,15 +117,23 @@ npm run build
 3. **密码验证**: 极高风险命令需要密码
 4. **同意持久化**: 记住用户的选择（30天）
 
-## 🏗️ 项目结构
+## 🏗️ 项目架构
+
+### 技术栈
+- **Angular 15** - UI框架
+- **TypeScript** - 类型安全
+- **Webpack 5** - 模块打包
+- **RxJS** - 响应式编程
+
+### 项目结构
 
 ```
 tabby-ai-assistant/
 ├── src/
 │   ├── index.ts                      # Angular主模块
 │   ├── types/                        # 类型定义
-│   │   ├── ai.types.ts               # AI相关类型
-│   │   ├── provider.types.ts         # 提供商类型
+│   │   ├── ai.types.ts               # AI相关类型（ChatRequest, ChatResponse等）
+│   │   ├── provider.types.ts         # 提供商类型 + PROVIDER_DEFAULTS
 │   │   ├── security.types.ts         # 安全类型
 │   │   └── terminal.types.ts         # 终端类型
 │   ├── services/                     # 服务层
@@ -137,22 +141,50 @@ tabby-ai-assistant/
 │   │   │   ├── ai-assistant.service.ts
 │   │   │   ├── ai-provider-manager.service.ts
 │   │   │   ├── config-provider.service.ts
-│   │   │   └── logger.service.ts
-│   │   ├── providers/                # AI提供商
-│   │   │   ├── base-provider.service.ts
+│   │   │   ├── logger.service.ts
+│   │   │   └── toast.service.ts      # Toast通知服务
+│   │   ├── providers/                # AI提供商实现
+│   │   │   ├── base-provider.service.ts    # 基础类（含通用方法）
+│   │   │   ├── anthropic-provider.service.ts
+│   │   │   ├── glm-provider.service.ts
 │   │   │   ├── minimax-provider.service.ts
-│   │   │   └── glm-provider.service.ts
+│   │   │   ├── ollama-provider.service.ts
+│   │   │   ├── openai-compatible.service.ts
+│   │   │   ├── openai-provider.service.ts
+│   │   │   └── vllm-provider.service.ts
 │   │   ├── security/                 # 安全服务
 │   │   │   └── risk-assessment.service.ts
 │   │   └── terminal/                 # 终端服务
 │   │       └── terminal-context.service.ts
 │   ├── components/                   # UI组件
-│   ├── models/                       # 数据模型
-│   └── utils/                        # 工具类
+│   │   ├── ai-sidebar.component.ts
+│   │   ├── chat/                     # 聊天组件
+│   │   └── settings/                 # 设置组件
+│   └── styles/                       # 样式文件
+│       └── ai-assistant.scss
 ├── webpack.config.js                 # Webpack配置
 ├── tsconfig.json                     # TypeScript配置
 └── package.json                      # 依赖配置
 ```
+
+### 设计模式
+
+#### 1. 提供商模式 (Provider Pattern)
+```
+IBaseAiProvider (接口)
+    ↑
+    └── BaseAiProvider (抽象类，包含通用方法)
+            ↑
+            ├── OpenAiProviderService
+            ├── AnthropicProviderService
+            ├── MinimaxProviderService
+            └── ...
+```
+
+#### 2. 配置统一化
+- 所有提供商默认配置存储在 `PROVIDER_DEFAULTS`
+- 使用 `ProviderConfigUtils` 工具函数处理配置
+- 配置自动从统一默认值填充
 
 ## 🔧 开发
 
@@ -163,38 +195,75 @@ npm run watch      # 开发模式（自动重编译）
 npm run clean      # 清理构建文件
 ```
 
-### 测试
-```bash
-npm test           # 运行单元测试
-```
+### 添加新提供商
+1. 在 `provider.types.ts` 的 `PROVIDER_DEFAULTS` 添加默认值
+2. 创建提供商服务类，继承 `BaseAiProvider`
+3. 实现必要的抽象方法
+4. 在 `ai-provider-manager.service.ts` 注册提供商
+
+### 重构记录
+- **v1.0.15**: 智能 Agent 工具调用循环 & BUG 修复
+  - 实现完整的 Agent 多轮工具调用循环
+  - 添加智能终止检测器（6种终止条件）
+  - 新增 `task_complete` 工具让 AI 主动结束任务
+  - 修复 RxJS async complete 回调问题
+  - 添加正则表达式模式匹配未完成/总结暗示
+  - 优化正则表达式预编译性能
+  - 新增 `MessageRole.TOOL` 角色支持
+
+- **v1.0.12**: 代码去重、类型优化、配置统一化
+  - 移除7个提供商中约800行重复代码
+  - `BaseAiProvider` 从抽象类改为接口 + 抽象类实现
+  - 新增统一配置系统 `PROVIDER_DEFAULTS`
 
 ## 📝 API文档
 
-### AI提供商接口
+### IBaseAiProvider 接口
 ```typescript
-interface BaseAiProvider {
-    name: string;
-    displayName: string;
-    capabilities: ProviderCapability[];
+interface IBaseAiProvider {
+    // 标识
+    readonly name: string;
+    readonly displayName: string;
+    readonly capabilities: ProviderCapability[];
+    readonly authConfig: AuthConfig;
 
+    // 配置与状态
+    configure(config: ProviderConfig): void;
+    getConfig(): ProviderConfig | null;
+    isConfigured(): boolean;
+    isEnabled(): boolean;
+
+    // 核心功能
     chat(request: ChatRequest): Promise<ChatResponse>;
+    chatStream(request: ChatRequest): Observable<any>;
     generateCommand(request: CommandRequest): Promise<CommandResponse>;
     explainCommand(request: ExplainRequest): Promise<ExplainResponse>;
     analyzeResult(request: AnalysisRequest): Promise<AnalysisResponse>;
+
+    // 健康与验证
+    healthCheck(): Promise<HealthStatus>;
+    validateConfig(): ValidationResult;
+
+    // 信息查询
+    getInfo(): ProviderInfo;
+    supportsCapability(capability: ProviderCapability): boolean;
 }
 ```
 
-### 终端上下文
+### ProviderConfigUtils
 ```typescript
-interface TerminalContext {
-    session: TerminalSession;
-    currentCommand?: string;
-    lastOutput?: string;
-    lastError?: string;
-    exitCode?: number;
-    isRunning: boolean;
-    recentCommands: string[];
-    systemInfo: SystemInfo;
+namespace ProviderConfigUtils {
+    // 使用默认值填充配置
+    function fillDefaults(config: Partial<ProviderConfig>, providerName: string): ProviderConfig;
+
+    // 检查配置是否完整
+    function isConfigComplete(config: ProviderConfig): boolean;
+
+    // 克隆配置（可选择脱敏）
+    function cloneConfig(config: ProviderConfig, maskApiKey?: boolean): ProviderConfig;
+
+    // 获取已知提供商列表
+    function getKnownProviders(): string[];
 }
 ```
 
@@ -216,10 +285,9 @@ interface TerminalContext {
 ## 🙏 致谢
 
 - [Tabby](https://tabby.sh/) - 强大的终端模拟器
-- [tabby-vscode-agent](https://github.com/SteffMet/tabby-vscode-agent) - 参考架构
+- [Anthropic](https://anthropic.com/) - Claude AI
 - [Minimax](https://minimaxi.com/) - AI服务
-- [GLM](https://open.bigmodel.cn/) - 智谱AI
-
+- [智谱AI](https://open.bigmodel.cn/) - GLM
 
 ---
 

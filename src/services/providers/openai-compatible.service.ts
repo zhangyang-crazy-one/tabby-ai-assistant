@@ -1,9 +1,9 @@
 import { Injectable } from '@angular/core';
-import { Observable, from } from 'rxjs';
+import { Observable, Observer } from 'rxjs';
 import axios, { AxiosInstance } from 'axios';
 import { BaseAiProvider } from './base-provider.service';
-import { ProviderCapability, HealthStatus, ValidationResult } from '../../types/provider.types';
-import { ChatRequest, ChatResponse, CommandRequest, CommandResponse, ExplainRequest, ExplainResponse, AnalysisRequest, AnalysisResponse, MessageRole } from '../../types/ai.types';
+import { ProviderCapability, ValidationResult } from '../../types/provider.types';
+import { ChatRequest, ChatResponse, CommandRequest, CommandResponse, ExplainRequest, ExplainResponse, AnalysisRequest, AnalysisResponse, MessageRole, StreamEvent } from '../../types/ai.types';
 import { LoggerService } from '../core/logger.service';
 
 /**
@@ -108,11 +108,157 @@ export class OpenAiCompatibleProviderService extends BaseAiProvider {
     }
 
     /**
-     * 流式聊天功能 - 暂未实现，回退到非流式
+     * 流式聊天功能 - 支持工具调用事件
      */
-    chatStream(request: ChatRequest): Observable<any> {
-        // 回退到非流式
-        return from(this.chat(request));
+    chatStream(request: ChatRequest): Observable<StreamEvent> {
+        return new Observable<StreamEvent>((subscriber: Observer<StreamEvent>) => {
+            if (!this.client) {
+                const error = new Error('OpenAI compatible client not initialized');
+                subscriber.next({ type: 'error', error: error.message });
+                subscriber.error(error);
+                return;
+            }
+
+            const abortController = new AbortController();
+
+            const runStream = async () => {
+                try {
+                    const response = await this.client!.post('/chat/completions', {
+                        model: this.config?.model || 'gpt-3.5-turbo',
+                        messages: this.transformMessages(request.messages),
+                        max_tokens: request.maxTokens || 1000,
+                        temperature: request.temperature || 0.7,
+                        stream: true
+                    }, {
+                        responseType: 'stream'
+                    });
+
+                    const stream = response.data;
+                    let currentToolCallId = '';
+                    let currentToolCallName = '';
+                    let currentToolInput = '';
+                    let currentToolIndex = -1;
+                    let fullContent = '';
+
+                    for await (const chunk of stream) {
+                        if (abortController.signal.aborted) break;
+
+                        const lines = chunk.toString().split('\n').filter(Boolean);
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const data = line.slice(6);
+                                if (data === '[DONE]') continue;
+
+                                try {
+                                    const parsed = JSON.parse(data);
+                                    const choice = parsed.choices?.[0];
+
+                                    this.logger.debug('Stream event', { type: 'delta', hasToolCalls: !!choice?.delta?.tool_calls });
+
+                                    // 处理工具调用块
+                                    if (choice?.delta?.tool_calls?.length > 0) {
+                                        for (const toolCall of choice.delta.tool_calls) {
+                                            const index = toolCall.index || 0;
+
+                                            if (currentToolIndex !== index) {
+                                                if (currentToolIndex >= 0) {
+                                                    let parsedInput = {};
+                                                    try {
+                                                        parsedInput = JSON.parse(currentToolInput || '{}');
+                                                    } catch (e) {
+                                                        // 使用原始输入
+                                                    }
+                                                    subscriber.next({
+                                                        type: 'tool_use_end',
+                                                        toolCall: {
+                                                            id: currentToolCallId,
+                                                            name: currentToolCallName,
+                                                            input: parsedInput
+                                                        }
+                                                    });
+                                                    this.logger.debug('Stream event', { type: 'tool_use_end', name: currentToolCallName });
+                                                }
+
+                                                currentToolIndex = index;
+                                                currentToolCallId = toolCall.id || `tool_${Date.now()}_${index}`;
+                                                currentToolCallName = toolCall.function?.name || '';
+                                                currentToolInput = toolCall.function?.arguments || '';
+
+                                                subscriber.next({
+                                                    type: 'tool_use_start',
+                                                    toolCall: {
+                                                        id: currentToolCallId,
+                                                        name: currentToolCallName,
+                                                        input: {}
+                                                    }
+                                                });
+                                                this.logger.debug('Stream event', { type: 'tool_use_start', name: currentToolCallName });
+                                            } else {
+                                                if (toolCall.function?.arguments) {
+                                                    currentToolInput += toolCall.function.arguments;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // 处理文本增量
+                                    else if (choice?.delta?.content) {
+                                        const textDelta = choice.delta.content;
+                                        fullContent += textDelta;
+                                        subscriber.next({
+                                            type: 'text_delta',
+                                            textDelta
+                                        });
+                                    }
+                                } catch (e) {
+                                    // 忽略解析错误
+                                }
+                            }
+                        }
+                    }
+
+                    if (currentToolIndex >= 0) {
+                        let parsedInput = {};
+                        try {
+                            parsedInput = JSON.parse(currentToolInput || '{}');
+                        } catch (e) {
+                            // 使用原始输入
+                        }
+                        subscriber.next({
+                            type: 'tool_use_end',
+                            toolCall: {
+                                id: currentToolCallId,
+                                name: currentToolCallName,
+                                input: parsedInput
+                            }
+                        });
+                        this.logger.debug('Stream event', { type: 'tool_use_end', name: currentToolCallName });
+                    }
+
+                    subscriber.next({
+                        type: 'message_end',
+                        message: {
+                            id: this.generateId(),
+                            role: MessageRole.ASSISTANT,
+                            content: fullContent,
+                            timestamp: new Date()
+                        }
+                    });
+                    this.logger.debug('Stream event', { type: 'message_end', contentLength: fullContent.length });
+                    subscriber.complete();
+
+                } catch (error) {
+                    const errorMessage = `OpenAI compatible stream failed: ${error instanceof Error ? error.message : String(error)}`;
+                    this.logger.error('Stream error', error);
+                    subscriber.next({ type: 'error', error: errorMessage });
+                    subscriber.error(new Error(errorMessage));
+                }
+            };
+
+            runStream();
+
+            return () => abortController.abort();
+        });
     }
 
     async generateCommand(request: CommandRequest): Promise<CommandResponse> {
@@ -175,35 +321,19 @@ export class OpenAiCompatibleProviderService extends BaseAiProvider {
         return this.parseAnalysisResponse(response.message.content);
     }
 
-    async healthCheck(): Promise<HealthStatus> {
-        try {
-            if (!this.client) {
-                return HealthStatus.UNHEALTHY;
-            }
-
-            const response = await this.client.post('/chat/completions', {
-                model: this.config?.model || 'gpt-3.5-turbo',
-                max_tokens: 1,
-                messages: [
-                    {
-                        role: 'user',
-                        content: 'Hi'
-                    }
-                ]
-            });
-
-            if (response.status === 200) {
-                this.lastHealthCheck = { status: HealthStatus.HEALTHY, timestamp: new Date() };
-                return HealthStatus.HEALTHY;
-            }
-
-            return HealthStatus.DEGRADED;
-
-        } catch (error) {
-            this.logger.error('OpenAI compatible health check failed', error);
-            this.lastHealthCheck = { status: HealthStatus.UNHEALTHY, timestamp: new Date() };
-            return HealthStatus.UNHEALTHY;
+    protected async sendTestRequest(request: ChatRequest): Promise<ChatResponse> {
+        if (!this.client) {
+            throw new Error('OpenAI compatible client not initialized');
         }
+
+        const response = await this.client.post('/chat/completions', {
+            model: this.config?.model || 'gpt-3.5-turbo',
+            messages: this.transformMessages(request.messages),
+            max_tokens: request.maxTokens || 1,
+            temperature: request.temperature || 0
+        });
+
+        return this.transformChatResponse(response.data);
     }
 
     validateConfig(): ValidationResult {
@@ -233,10 +363,6 @@ export class OpenAiCompatibleProviderService extends BaseAiProvider {
         return result;
     }
 
-    protected getDefaultBaseURL(): string {
-        return 'http://localhost:11434/v1';
-    }
-
     protected transformMessages(messages: any[]): any[] {
         return messages.map(msg => ({
             role: msg.role,
@@ -260,144 +386,6 @@ export class OpenAiCompatibleProviderService extends BaseAiProvider {
                 completionTokens: response.usage.completion_tokens || 0,
                 totalTokens: response.usage.total_tokens || 0
             } : undefined
-        };
-    }
-
-    private buildCommandPrompt(request: CommandRequest): string {
-        let prompt = `请将以下自然语言描述转换为准确的终端命令：\n\n"${request.naturalLanguage}"\n\n`;
-
-        if (request.context) {
-            prompt += `当前环境：\n`;
-            if (request.context.currentDirectory) {
-                prompt += `- 当前目录：${request.context.currentDirectory}\n`;
-            }
-            if (request.context.operatingSystem) {
-                prompt += `- 操作系统：${request.context.operatingSystem}\n`;
-            }
-            if (request.context.shell) {
-                prompt += `- Shell：${request.context.shell}\n`;
-            }
-        }
-
-        prompt += `\n请直接返回JSON格式：\n`;
-        prompt += `{\n`;
-        prompt += `  "command": "具体命令",\n`;
-        prompt += `  "explanation": "命令解释",\n`;
-        prompt += `  "confidence": 0.95\n`;
-        prompt += `}\n`;
-
-        return prompt;
-    }
-
-    private buildExplainPrompt(request: ExplainRequest): string {
-        let prompt = `请详细解释以下终端命令：\n\n\`${request.command}\`\n\n`;
-
-        if (request.context?.currentDirectory) {
-            prompt += `当前目录：${request.context.currentDirectory}\n`;
-        }
-        if (request.context?.operatingSystem) {
-            prompt += `操作系统：${request.context.operatingSystem}\n`;
-        }
-
-        prompt += `\n请按以下JSON格式返回：\n`;
-        prompt += `{\n`;
-        prompt += `  "explanation": "整体解释",\n`;
-        prompt += `  "breakdown": [\n`;
-        prompt += `    {"part": "命令部分", "description": "说明"}\n`;
-        prompt += `  ],\n`;
-        prompt += `  "examples": ["使用示例"]\n`;
-        prompt += `}\n`;
-
-        return prompt;
-    }
-
-    private buildAnalysisPrompt(request: AnalysisRequest): string {
-        let prompt = `请分析以下命令执行结果：\n\n`;
-        prompt += `命令：${request.command}\n`;
-        prompt += `退出码：${request.exitCode}\n`;
-        prompt += `输出：\n${request.output}\n\n`;
-
-        if (request.context?.workingDirectory) {
-            prompt += `工作目录：${request.context.workingDirectory}\n`;
-        }
-
-        prompt += `\n请按以下JSON格式返回：\n`;
-        prompt += `{\n`;
-        prompt += `  "summary": "结果总结",\n`;
-        prompt += `  "insights": ["洞察1", "洞察2"],\n`;
-        prompt += `  "success": true/false,\n`;
-        prompt += `  "issues": [\n`;
-        prompt += `    {"severity": "warning|error|info", "message": "问题描述", "suggestion": "建议"}\n`;
-        prompt += `  ]\n`;
-        prompt += `}\n`;
-
-        return prompt;
-    }
-
-    private parseCommandResponse(content: string): CommandResponse {
-        try {
-            const match = content.match(/\{[\s\S]*\}/);
-            if (match) {
-                const parsed = JSON.parse(match[0]);
-                return {
-                    command: parsed.command || '',
-                    explanation: parsed.explanation || '',
-                    confidence: parsed.confidence || 0.5
-                };
-            }
-        } catch (error) {
-            this.logger.warn('Failed to parse command response as JSON', error);
-        }
-
-        const lines = content.split('\n').map(l => l.trim()).filter(l => l);
-        return {
-            command: lines[0] || '',
-            explanation: lines.slice(1).join(' ') || 'AI生成的命令',
-            confidence: 0.5
-        };
-    }
-
-    private parseExplainResponse(content: string): ExplainResponse {
-        try {
-            const match = content.match(/\{[\s\S]*\}/);
-            if (match) {
-                const parsed = JSON.parse(match[0]);
-                return {
-                    explanation: parsed.explanation || '',
-                    breakdown: parsed.breakdown || [],
-                    examples: parsed.examples || []
-                };
-            }
-        } catch (error) {
-            this.logger.warn('Failed to parse explain response as JSON', error);
-        }
-
-        return {
-            explanation: content,
-            breakdown: []
-        };
-    }
-
-    private parseAnalysisResponse(content: string): AnalysisResponse {
-        try {
-            const match = content.match(/\{[\s\S]*\}/);
-            if (match) {
-                const parsed = JSON.parse(match[0]);
-                return {
-                    summary: parsed.summary || '',
-                    insights: parsed.insights || [],
-                    success: parsed.success !== false,
-                    issues: parsed.issues || []
-                };
-            }
-        } catch (error) {
-            this.logger.warn('Failed to parse analysis response as JSON', error);
-        }
-
-        return {
-            summary: content,
-            insights: [],
-            success: true
         };
     }
 }

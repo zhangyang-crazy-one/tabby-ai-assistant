@@ -161,6 +161,7 @@
             opacity: 0;
             transform: translateY(10px);
         }
+
         to {
             opacity: 1;
             transform: translateY(0);
@@ -253,7 +254,93 @@
             line-height: 1.6;
             color: var(--ai-text-primary, #f8f9fa);
             word-wrap: break-word;
-            white-space: pre-wrap;
+
+            // 重置 pre-wrap，让 marked 渲染的内容正常显示
+            p {
+                margin: 0 0 8px 0;
+
+                &:last-child {
+                    margin-bottom: 0;
+                }
+            }
+
+            // 标题样式
+            h1,
+            h2,
+            h3,
+            h4,
+            h5,
+            h6 {
+                margin: 12px 0 8px 0;
+                font-weight: 600;
+                color: var(--ai-primary, #4dabf7);
+            }
+
+            h1 {
+                font-size: 1.4em;
+            }
+
+            h2 {
+                font-size: 1.25em;
+            }
+
+            h3 {
+                font-size: 1.1em;
+            }
+
+            h4,
+            h5,
+            h6 {
+                font-size: 1em;
+            }
+
+            // 列表样式
+            ul,
+            ol {
+                margin: 8px 0;
+                padding-left: 20px;
+            }
+
+            li {
+                margin: 4px 0;
+            }
+
+            // 链接样式
+            a {
+                color: var(--ai-primary, #4dabf7);
+                text-decoration: none;
+
+                &:hover {
+                    text-decoration: underline;
+                }
+            }
+
+            // 引用块样式
+            blockquote {
+                margin: 8px 0;
+                padding: 8px 12px;
+                border-left: 3px solid var(--ai-primary, #4dabf7);
+                background: var(--ai-bg-tertiary, #3d3d3d);
+                border-radius: 0 4px 4px 0;
+                color: var(--ai-text-secondary, #adb5bd);
+            }
+
+            // 分隔线
+            hr {
+                border: none;
+                border-top: 1px solid var(--ai-border, #4a4a4a);
+                margin: 12px 0;
+            }
+
+            // 粗体和斜体
+            strong {
+                font-weight: 600;
+                color: var(--ai-text-primary, #f8f9fa);
+            }
+
+            em {
+                font-style: italic;
+            }
 
             // 代码块样式
             code {
@@ -285,7 +372,8 @@
                 margin: 8px 0;
                 font-size: 12px;
 
-                th, td {
+                th,
+                td {
                     border: 1px solid var(--ai-border, #4a4a4a);
                     padding: 6px 10px;
                     text-align: left;
@@ -298,6 +386,126 @@
 
                 tr:nth-child(even) {
                     background: rgba(var(--ai-bg-secondary, #2d2d2d), 0.3);
+                }
+            }
+
+            // 复选框样式（GitHub 风格）
+            input[type="checkbox"] {
+                margin-right: 6px;
+            }
+
+            // 工具调用卡片样式
+            .tool-call-card {
+                margin: 12px 0;
+                border-radius: 8px;
+                border: 1px solid var(--ai-border, #4a4a4a);
+                overflow: hidden;
+                background: var(--ai-bg-tertiary, #3d3d3d);
+
+                .tool-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 8px 12px;
+                    background: rgba(0, 0, 0, 0.2);
+                    border-bottom: 1px solid var(--ai-border, #4a4a4a);
+
+                    .tool-icon {
+                        font-size: 14px;
+                    }
+
+                    .tool-name {
+                        font-weight: 600;
+                        font-family: 'Courier New', 'Consolas', monospace;
+                        color: var(--ai-primary, #4dabf7);
+                    }
+
+                    .tool-status {
+                        font-size: 12px;
+                        color: var(--ai-text-secondary, #adb5bd);
+                        margin-left: auto;
+                    }
+
+                    .tool-duration {
+                        font-size: 11px;
+                        color: var(--ai-text-secondary, #adb5bd);
+                        background: rgba(0, 0, 0, 0.3);
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                        margin-left: auto;
+                    }
+                }
+
+                .tool-output {
+                    padding: 8px 12px;
+
+                    .tool-output-header {
+                        font-size: 11px;
+                        font-weight: 600;
+                        color: var(--ai-text-secondary, #adb5bd);
+                        margin-bottom: 4px;
+                    }
+
+                    .tool-output-content {
+                        margin: 0;
+                        padding: 8px;
+                        background: rgba(0, 0, 0, 0.2);
+                        border-radius: 4px;
+                        font-size: 12px;
+                        overflow-x: auto;
+                        max-height: 200px;
+                        overflow-y: auto;
+                        white-space: pre-wrap;
+                        word-break: break-word;
+                    }
+                }
+
+                // 执行中状态
+                &.tool-executing {
+                    border-color: var(--ai-warning, #fcc419);
+
+                    .tool-header {
+                        background: rgba(252, 196, 25, 0.15);
+                    }
+
+                    .tool-status {
+                        color: var(--ai-warning, #fcc419);
+                        animation: pulse 1.5s infinite;
+                    }
+                }
+
+                // 成功状态
+                &.tool-success {
+                    border-color: var(--ai-success, #51cf66);
+
+                    .tool-header {
+                        background: rgba(81, 207, 102, 0.15);
+                    }
+                }
+
+                // 失败状态
+                &.tool-error {
+                    border-color: var(--ai-danger, #ff6b6b);
+
+                    .tool-header {
+                        background: rgba(255, 107, 107, 0.15);
+                    }
+
+                    .tool-error-message .tool-output-content {
+                        color: var(--ai-danger, #ff6b6b);
+                    }
+                }
+            }
+
+            @keyframes pulse {
+
+                0%,
+                100% {
+                    opacity: 1;
+                }
+
+                50% {
+                    opacity: 0.5;
                 }
             }
         }
@@ -332,10 +540,14 @@
 }
 
 @keyframes loadingDot {
-    0%, 80%, 100% {
+
+    0%,
+    80%,
+    100% {
         transform: scale(0.6);
         opacity: 0.5;
     }
+
     40% {
         transform: scale(1);
         opacity: 1;
@@ -483,11 +695,10 @@
 
     &:hover {
         background: linear-gradient(to right,
-            transparent,
-            var(--ai-primary, #4dabf7) 40%,
-            var(--ai-primary, #4dabf7) 60%,
-            transparent
-        ) !important;
+                transparent,
+                var(--ai-primary, #4dabf7) 40%,
+                var(--ai-primary, #4dabf7) 60%,
+                transparent) !important;
     }
 
     &:active {

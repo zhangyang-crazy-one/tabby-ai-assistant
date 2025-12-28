@@ -1,7 +1,19 @@
 import { Injectable } from '@angular/core';
 import { Subject, Observable } from 'rxjs';
-import { TerminalContext, TerminalSession, TerminalError, CommandResult, SystemInfo, ProcessInfo } from '../../types/terminal.types';
+import { TerminalContext, TerminalSession, TerminalError, CommandResult, SystemInfo, ProcessInfo, ProjectInfo } from '../../types/terminal.types';
 import { LoggerService } from '../core/logger.service';
+
+/**
+ * 项目检测配置
+ */
+interface ProjectDetector {
+    pattern: RegExp;
+    type: ProjectInfo['type'];
+    configFiles: string[];
+    parseConfig: (content: string) => Partial<ProjectInfo>;
+    language: string;
+    framework?: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class TerminalContextService {
@@ -9,6 +21,127 @@ export class TerminalContextService {
     private contextChange$ = new Subject<TerminalContext>();
     private errorDetected$ = new Subject<TerminalError>();
     private commandExecuted$ = new Subject<CommandResult>();
+
+    // 项目检测器配置
+    private readonly projectDetectors: ProjectDetector[] = [
+        {
+            pattern: /package\.json$/,
+            type: 'npm',
+            configFiles: ['package.json'],
+            parseConfig: (content: string) => {
+                try {
+                    const pkg = JSON.parse(content);
+                    return {
+                        name: pkg.name,
+                        version: pkg.version,
+                        dependencies: Object.keys(pkg.dependencies || {}),
+                        scripts: pkg.scripts,
+                        description: pkg.description,
+                        framework: pkg.dependencies ? this.detectFramework(Object.keys(pkg.dependencies)) : undefined
+                    };
+                } catch {
+                    return {};
+                }
+            },
+            language: 'JavaScript/TypeScript'
+        },
+        {
+            pattern: /pom\.xml$/,
+            type: 'maven',
+            configFiles: ['pom.xml'],
+            parseConfig: (content: string) => {
+                const nameMatch = content.match(/<artifactId>([^<]+)<\/artifactId>/);
+                const versionMatch = content.match(/<version>([^<]+)<\/version>/);
+                return {
+                    name: nameMatch?.[1],
+                    version: versionMatch?.[1],
+                    language: 'Java'
+                };
+            },
+            language: 'Java'
+        },
+        {
+            pattern: /build\.gradle$/,
+            type: 'gradle',
+            configFiles: ['build.gradle', 'build.gradle.kts'],
+            parseConfig: (content: string) => {
+                const nameMatch = content.match(/rootProject\.name\s*=\s*['"]([^'"]+)['"]/);
+                const versionMatch = content.match(/version\s*=\s*['"]([^'"]+)['"]/);
+                return {
+                    name: nameMatch?.[1],
+                    version: versionMatch?.[1],
+                    language: 'Java/Kotlin'
+                };
+            },
+            language: 'Java/Kotlin'
+        },
+        {
+            pattern: /requirements\.txt$/,
+            type: 'pip',
+            configFiles: ['requirements.txt'],
+            parseConfig: (content: string) => {
+                const deps = content.split('\n')
+                    .map(line => line.split(/[>=<!]/)[0].trim())
+                    .filter(d => d.length > 0);
+                return {
+                    dependencies: deps,
+                    language: 'Python',
+                    framework: this.detectPythonFramework(deps)
+                };
+            },
+            language: 'Python'
+        },
+        {
+            pattern: /Cargo\.toml$/,
+            type: 'cargo',
+            configFiles: ['Cargo.toml'],
+            parseConfig: (content: string) => {
+                const nameMatch = content.match(/name\s*=\s*["']([^"']+)["']/);
+                const versionMatch = content.match(/version\s*=\s*["']([^"']+)["']/);
+                return {
+                    name: nameMatch?.[1],
+                    version: versionMatch?.[1],
+                    language: 'Rust'
+                };
+            },
+            language: 'Rust'
+        },
+        {
+            pattern: /go\.mod$/,
+            type: 'go',
+            configFiles: ['go.mod'],
+            parseConfig: (content: string) => {
+                const moduleMatch = content.match(/module\s+([^\s]+)/);
+                const versionMatch = content.match(/go\s+([\d.]+)/);
+                return {
+                    name: moduleMatch?.[1],
+                    version: versionMatch?.[1],
+                    language: 'Go'
+                };
+            },
+            language: 'Go'
+        },
+        {
+            pattern: /yarn\.lock$/,
+            type: 'yarn',
+            configFiles: ['package.json', 'yarn.lock'],
+            parseConfig: (content: string) => {
+                try {
+                    const pkg = JSON.parse(content);
+                    return {
+                        name: pkg.name,
+                        version: pkg.version,
+                        dependencies: Object.keys(pkg.dependencies || {}),
+                        scripts: pkg.scripts,
+                        description: pkg.description
+                    };
+                } catch {
+                    return {};
+                }
+            },
+            language: 'JavaScript/TypeScript'
+        }
+    ];
 
     constructor(private logger: LoggerService) {
         this.initializeContext();
@@ -25,7 +158,7 @@ export class TerminalContextService {
                 isRunning: false,
                 recentCommands: [],
                 systemInfo,
-                projectInfo
+                projectInfo: projectInfo || undefined
             };
 
             this.logger.info('Terminal context initialized', { context: this.currentContext });
@@ -244,11 +377,138 @@ export class TerminalContextService {
 
     /**
      * 检测项目信息
+     * 根据当前工作目录中的配置文件检测项目类型和元数据
      */
-    private async detectProjectInfo(): Promise<any> {
-        // TODO: 实现项目检测逻辑
-        // 检测 .git, package.json, pom.xml, build.gradle 等
+    async detectProjectInfo(): Promise<ProjectInfo | null> {
+        const cwd = this.currentContext?.session.cwd || process.cwd();
+
+        // 检测 .git 目录（Git 项目）
+        const hasGit = await this.checkFileExists('.git');
+        if (hasGit) {
+            return {
+                type: 'git',
+                root: cwd,
+                name: this.extractProjectName(cwd),
+                language: 'N/A'
+            };
+        }
+
+        // 遍历项目检测器
+        for (const detector of this.projectDetectors) {
+            for (const configFile of detector.configFiles) {
+                const content = await this.readFileContent(configFile);
+                if (content) {
+                    const config = detector.parseConfig(content);
+                    return {
+                        type: detector.type,
+                        root: cwd,
+                        name: config.name || this.extractProjectName(cwd),
+                        version: config.version,
+                        dependencies: config.dependencies,
+                        scripts: config.scripts,
+                        description: config.description,
+                        language: detector.language,
+                        framework: config.framework || detector.framework
+                    };
+                }
+            }
+        }
+
+        // 未检测到项目
         return null;
+    }
+
+    /**
+     * 手动触发项目重新检测
+     */
+    async refreshProjectInfo(): Promise<void> {
+        if (!this.currentContext) return;
+
+        const projectInfo = await this.detectProjectInfo();
+        this.currentContext.projectInfo = projectInfo || undefined;
+        this.contextChange$.next(this.currentContext);
+
+        this.logger.info('Project info refreshed', { projectInfo });
+    }
+
+    /**
+     * 获取所有检测到的项目类型
+     */
+    getSupportedProjectTypes(): ProjectInfo['type'][] {
+        return this.projectDetectors.map(d => d.type);
+    }
+
+    /**
+     * 检查文件是否存在（模拟实现）
+     */
+    private async checkFileExists(_filename: string): Promise<boolean> {
+        // 在浏览器环境中，此方法需要与实际的 Tabby API 集成
+        // 这里返回模拟值用于演示
+        return false;
+    }
+
+    /**
+     * 读取文件内容（模拟实现）
+     */
+    private async readFileContent(_filename: string): Promise<string | null> {
+        // 在浏览器环境中，此方法需要与实际的 Tabby API 集成
+        // 这里返回模拟值用于演示
+        return null;
+    }
+
+    /**
+     * 从路径提取项目名称
+     */
+    private extractProjectName(path: string): string {
+        const parts = path.split('/');
+        return parts[parts.length - 1] || 'unknown-project';
+    }
+
+    /**
+     * 检测 JavaScript/TypeScript 项目框架
+     */
+    private detectFramework(dependencies: string[]): string | undefined {
+        const frameworkIndicators: { [key: string]: string[] } = {
+            'React': ['react', 'react-dom'],
+            'Vue': ['vue'],
+            'Angular': ['@angular/core'],
+            'Next.js': ['next'],
+            'Nuxt': ['nuxt'],
+            'Svelte': ['svelte'],
+            'Express': ['express'],
+            'NestJS': ['@nestjs/core'],
+            'Electron': ['electron'],
+            'Expo': ['expo']
+        };
+
+        for (const [framework, indicators] of Object.entries(frameworkIndicators)) {
+            if (indicators.some(ind => dependencies.includes(ind))) {
+                return framework;
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * 检测 Python 项目框架
+     */
+    private detectPythonFramework(dependencies: string[]): string | undefined {
+        const frameworkIndicators: { [key: string]: string[] } = {
+            'Django': ['django'],
+            'Flask': ['flask'],
+            'FastAPI': ['fastapi'],
+            'Pyramid': ['pyramid'],
+            'Tornado': ['tornado'],
+            'Web2py': ['web2py'],
+            'CherryPy': ['cherrypy']
+        };
+
+        for (const [framework, indicators] of Object.entries(frameworkIndicators)) {
+            if (indicators.some(ind => dependencies.includes(ind))) {
+                return framework;
+            }
+        }
+        return undefined;
     }
 
     /**

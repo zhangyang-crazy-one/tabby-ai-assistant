@@ -1,8 +1,21 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
+import * as pako from 'pako';
 import { LoggerService } from './logger.service';
 import { ChatHistoryService } from '../chat/chat-history.service';
 import { Checkpoint, ApiMessage } from '../../types/ai.types';
+
+/**
+ * 压缩后的检查点数据接口
+ */
+export interface CompressedCheckpointData {
+    compressed: boolean;
+    compressionRatio: number;
+    originalSize: number;
+    compressedSize: number;
+    messages: ApiMessage[];
+    messagesJson: string; // 压缩后的JSON字符串
+}
 
 /**
  * 检查点状态
@@ -63,6 +76,13 @@ export class CheckpointManager {
     private readonly MAX_CHECKPOINTS_PER_SESSION = 20;
     private readonly AUTO_CLEANUP_DAYS = 30;
     private readonly COMPRESSION_THRESHOLD = 1000; // 消息数量阈值
+    private readonly MIN_COMPRESSION_SIZE = 1024; // 最小压缩大小（字节）
+    private readonly COMPRESSION_LEVEL = 6; // pako压缩级别 (1-9)
+
+    // 压缩统计
+    private totalOriginalSize = 0;
+    private totalCompressedSize = 0;
+    private compressionCount = 0;
 
     constructor(
         private logger: LoggerService,
@@ -243,6 +263,7 @@ export class CheckpointManager {
 
     /**
      * 压缩存储检查点
+     * 使用 pako DEFLATE 算法压缩消息数据
      */
     async compressForCheckpoint(checkpointId: string): Promise<Checkpoint> {
         const checkpoint = this.getCheckpoint(checkpointId);
@@ -250,25 +271,185 @@ export class CheckpointManager {
             throw new Error(`Checkpoint not found: ${checkpointId}`);
         }
 
-        // TODO: 实现压缩逻辑
-        // 这里应该使用 ContextManager 进行压缩
-        const compressedMessages = checkpoint.messages; // 临时实现
+        try {
+            // 1. 将消息转换为 JSON 字符串
+            const messagesJson = JSON.stringify(checkpoint.messages);
+            const originalSize = messagesJson.length;
 
-        const compressedCheckpoint: Checkpoint = {
-            ...checkpoint,
-            messages: compressedMessages,
-            // 可以添加压缩相关的元数据
+            // 2. 如果数据太小，不进行压缩
+            if (originalSize < this.MIN_COMPRESSION_SIZE) {
+                this.logger.info('Checkpoint too small for compression', {
+                    checkpointId,
+                    size: originalSize
+                });
+                return checkpoint;
+            }
+
+            // 3. 使用 pako 进行 DEFLATE 压缩
+            const compressedData = pako.deflate(messagesJson, {
+                level: this.COMPRESSION_LEVEL
+            });
+
+            // 4. 将压缩后的数据转换为 base64 字符串存储
+            const compressedJson = this.arrayBufferToBase64(compressedData);
+
+            // 5. 计算压缩比
+            const compressedSize = compressedData.length;
+            const compressionRatioValue = originalSize > 0
+                ? parseFloat(((originalSize - compressedSize) / originalSize * 100).toFixed(2))
+                : 0;
+
+            // 6. 更新统计
+            this.totalOriginalSize += originalSize;
+            this.totalCompressedSize += compressedSize;
+            this.compressionCount++;
+
+            // 7. 创建压缩后的检查点（保留原始消息用于恢复）
+            const compressedCheckpoint: Checkpoint = {
+                ...checkpoint,
+                messages: checkpoint.messages, // 保留原始数据用于即时访问
+                compressedData: {
+                    compressed: true,
+                    compressionRatio: compressionRatioValue,
+                    originalSize,
+                    compressedSize,
+                    messagesJson: compressedJson
+                }
+            };
+
+            this.updateCheckpoint(compressedCheckpoint);
+
+            this.logger.info('Checkpoint compressed successfully', {
+                checkpointId,
+                originalSize,
+                compressedSize,
+                compressionRatio: `${compressionRatioValue}%`,
+                overallRatio: this.getOverallCompressionRatio()
+            });
+
+            return compressedCheckpoint;
+        } catch (error) {
+            this.logger.error('Failed to compress checkpoint', {
+                checkpointId,
+                error
+            });
+            throw error;
+        }
+    }
+
+    /**
+     * 解压缩检查点
+     */
+    decompressCheckpoint(checkpointId: string): ApiMessage[] {
+        const checkpoint = this.getCheckpoint(checkpointId);
+        if (!checkpoint) {
+            throw new Error(`Checkpoint not found: ${checkpointId}`);
+        }
+
+        // 如果有压缩数据，解压缩
+        if (checkpoint.compressedData?.compressed) {
+            try {
+                const compressedData = this.base64ToArrayBuffer(checkpoint.compressedData.messagesJson);
+                const decompressedJson = pako.inflate(compressedData, { to: 'string' });
+                return JSON.parse(decompressedJson) as ApiMessage[];
+            } catch (error) {
+                this.logger.error('Failed to decompress checkpoint', {
+                    checkpointId,
+                    error
+                });
+                throw new Error('Failed to decompress checkpoint');
+            }
+        }
+
+        // 否则返回原始消息
+        return checkpoint.messages;
+    }
+
+    /**
+     * 自动压缩符合条件的检查点
+     */
+    async autoCompressLargeCheckpoints(): Promise<number> {
+        const allCheckpoints = this.checkpointsSubject.value;
+        let compressedCount = 0;
+
+        for (const checkpoint of allCheckpoints) {
+            // 只压缩消息数量超过阈值的检查点
+            if (checkpoint.messages.length >= this.COMPRESSION_THRESHOLD) {
+                if (!checkpoint.compressedData?.compressed) {
+                    try {
+                        await this.compressForCheckpoint(checkpoint.id);
+                        compressedCount++;
+                    } catch (error) {
+                        this.logger.warn('Failed to auto-compress checkpoint', {
+                            checkpointId: checkpoint.id,
+                            error
+                        });
+                    }
+                }
+            }
+        }
+
+        if (compressedCount > 0) {
+            this.logger.info('Auto-compression completed', {
+                compressedCount,
+                overallRatio: this.getOverallCompressionRatio()
+            });
+        }
+
+        return compressedCount;
+    }
+
+    /**
+     * 获取压缩统计信息
+     */
+    getCompressionStatistics(): {
+        totalOriginalSize: number;
+        totalCompressedSize: number;
+        compressionCount: number;
+        overallRatio: string;
+        averageRatio: number;
+    } {
+        return {
+            totalOriginalSize: this.totalOriginalSize,
+            totalCompressedSize: this.totalCompressedSize,
+            compressionCount: this.compressionCount,
+            overallRatio: this.getOverallCompressionRatio(),
+            averageRatio: this.compressionCount > 0
+                ? ((this.totalOriginalSize - this.totalCompressedSize) / this.totalOriginalSize * 100)
+                : 0
         };
+    }
 
-        this.updateCheckpoint(compressedCheckpoint);
+    /**
+     * 获取整体压缩比
+     */
+    private getOverallCompressionRatio(): string {
+        if (this.totalOriginalSize === 0) return '0%';
+        const ratio = ((this.totalOriginalSize - this.totalCompressedSize) / this.totalOriginalSize * 100);
+        return `${ratio.toFixed(2)}%`;
+    }
 
-        this.logger.info('Checkpoint compressed', {
-            checkpointId,
-            originalSize: checkpoint.messages.length,
-            compressedSize: compressedMessages.length
-        });
+    /**
+     * 将 ArrayBuffer 转换为 Base64 字符串
+     */
+    private arrayBufferToBase64(buffer: Uint8Array): string {
+        let binary = '';
+        for (let i = 0; i < buffer.length; i++) {
+            binary += String.fromCharCode(buffer[i]);
+        }
+        return btoa(binary);
+    }
 
-        return compressedCheckpoint;
+    /**
+     * 将 Base64 字符串转换为 Uint8Array
+     */
+    private base64ToArrayBuffer(base64: string): Uint8Array {
+        const binary = atob(base64);
+        const buffer = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            buffer[i] = binary.charCodeAt(i);
+        }
+        return buffer;
     }
 
     /**
@@ -327,9 +508,24 @@ export class CheckpointManager {
         const allCheckpoints = this.checkpointsSubject.value;
 
         const totalCheckpoints = allCheckpoints.length;
-        const activeCheckpoints = totalCheckpoints; // 简化实现
-        const archivedCheckpoints = 0; // TODO: 实现状态跟踪
-        const compressedCheckpoints = 0; // TODO: 实现压缩状态跟踪
+
+        // 统计归档和压缩的检查点
+        let archivedCount = 0;
+        let compressedCount = 0;
+        allCheckpoints.forEach(cp => {
+            // 检查是否已归档
+            if (cp.isArchived) {
+                archivedCount++;
+            }
+            // 检查是否已压缩
+            if (cp.compressedData?.compressed) {
+                compressedCount++;
+            }
+        });
+
+        const activeCheckpoints = totalCheckpoints - archivedCount;
+        const archivedCheckpoints = archivedCount;
+        const compressedCheckpoints = compressedCount;
 
         const totalMessages = allCheckpoints.reduce((sum, cp) => sum + cp.messages.length, 0);
         const averageMessagesPerCheckpoint = totalCheckpoints > 0 ? totalMessages / totalCheckpoints : 0;
@@ -516,7 +712,11 @@ export class CheckpointManager {
         }
 
         if (filter.tags && filter.tags.length > 0) {
-            // TODO: 实现标签过滤
+            filtered = filtered.filter(cp => {
+                // 检查点需要至少有一个匹配的标签
+                const cpTags = cp.tags || [];
+                return filter.tags!.some(tag => cpTags.includes(tag));
+            });
         }
 
         return filtered;

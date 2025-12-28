@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Subject, Observable } from 'rxjs';
 import { LoggerService } from './logger.service';
 import { SecurityConfig } from '../../types/security.types';
-import { ProviderConfig } from '../../types/provider.types';
+import { ProviderConfig, PROVIDER_DEFAULTS, ProviderConfigUtils } from '../../types/provider.types';
 import { ContextConfig } from '../../types/ai.types';
 
 /**
@@ -217,17 +217,9 @@ export class ConfigProviderService {
         if (contextWindow && contextWindow > 0) {
             return contextWindow;
         }
-        // 返回供应商默认值
-        const defaults: { [key: string]: number } = {
-            'openai': 128000,
-            'anthropic': 200000,
-            'minimax': 128000,
-            'glm': 128000,
-            'ollama': 8192,
-            'vllm': 8192,
-            'openai-compatible': 128000
-        };
-        return defaults[activeProvider] || 200000;
+        // 从统一默认值获取
+        const defaults = PROVIDER_DEFAULTS[activeProvider];
+        return defaults?.contextWindow || 200000;
     }
 
     /**

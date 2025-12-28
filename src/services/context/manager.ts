@@ -2,6 +2,8 @@ import { Injectable } from '@angular/core';
 import { LoggerService } from '../core/logger.service';
 import { ConfigProviderService } from '../core/config-provider.service';
 import { ChatHistoryService, SavedSession } from '../chat/chat-history.service';
+import { SummaryService } from './summary.service';
+import { calculateCost, formatCost } from '../../utils/cost.utils';
 import {
     ApiMessage,
     ContextConfig,
@@ -9,7 +11,8 @@ import {
     TokenUsage,
     CompactionResult,
     PruneResult,
-    TruncationResult
+    TruncationResult,
+    ChatMessage
 } from '../../types/ai.types';
 
 /**
@@ -25,7 +28,8 @@ export class ContextManager {
     constructor(
         private logger: LoggerService,
         private chatHistoryService: ChatHistoryService,
-        private configService: ConfigProviderService
+        private configService: ConfigProviderService,
+        private summaryService: SummaryService
     ) {
         this.config = { ...DEFAULT_CONTEXT_CONFIG };
         // 动态获取当前供应商的上下文限制
@@ -353,9 +357,9 @@ export class ContextManager {
             // 格式化消息用于摘要
             const summaryInput = this.formatMessagesForSummary(messagesToSummarize);
 
-            // TODO: 调用AI API生成摘要
-            // 这里先使用占位符实现
-            const summary = `[摘要: ${messagesToSummarize.length}条消息已压缩为摘要，节省约${messagesToSummarize.length * 50}个Token]`;
+            // 调用AI API生成摘要
+            const summaryResult = await this.summaryService.generateSummary(messagesToSummarize);
+            const summary = summaryResult.summary;
 
             // 创建摘要消息
             const summaryMessage: ApiMessage = {
@@ -364,7 +368,13 @@ export class ContextManager {
                 ts: Date.now(),
                 isSummary: true,
                 condenseId,
-                condenseParent: undefined
+                condenseParent: undefined,
+                // 记录摘要元数据
+                summaryMeta: {
+                    originalMessageCount: summaryResult.originalMessageCount,
+                    tokensCost: summaryResult.tokensCost,
+                    compressionRatio: this.summaryService.calculateCompressionRatio(summaryResult.originalMessageCount, summary.length)
+                }
             };
 
             // 标记被压缩的消息
@@ -387,13 +397,23 @@ export class ContextManager {
                 condenseId
             );
 
+            // 计算API成本
+            const provider = this.configService.getDefaultProvider();
+            const providerConfig = this.configService.getProviderConfig(provider);
+            const model = providerConfig?.model || 'gpt-4o';
+            const costResult = calculateCost(
+                provider as any,
+                model,
+                { inputTokens: summaryResult.tokensCost, outputTokens: Math.floor(summaryResult.tokensCost * 0.05) }
+            );
+
             return {
                 success: true,
                 messages: resultMessages,
                 summary,
                 condenseId,
                 tokensSaved,
-                cost: 0 // TODO: 计算实际API成本
+                cost: costResult.totalCost
             };
 
         } catch (error) {

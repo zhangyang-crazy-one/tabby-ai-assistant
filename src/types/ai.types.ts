@@ -6,7 +6,8 @@
 export enum MessageRole {
     USER = 'user',
     ASSISTANT = 'assistant',
-    SYSTEM = 'system'
+    SYSTEM = 'system',
+    TOOL = 'tool'      // 工具结果角色（部分 AI 需要）
 }
 
 // 聊天消息
@@ -140,7 +141,7 @@ export interface ValidationResult {
 
 // API消息接口（支持压缩标记）
 export interface ApiMessage {
-    role: 'user' | 'assistant' | 'system';
+    role: 'user' | 'assistant' | 'system' | 'tool' | 'function';
     content: string | ContentBlock[];
     ts: number;  // 时间戳（毫秒）
 
@@ -148,6 +149,11 @@ export interface ApiMessage {
     isSummary?: boolean;        // 是否为摘要消息
     condenseId?: string;        // 摘要ID
     condenseParent?: string;    // 被哪个摘要压缩
+    summaryMeta?: {             // 摘要元数据
+        originalMessageCount: number;
+        tokensCost: number;
+        compressionRatio: number;
+    };
 
     // 截断相关元数据
     isTruncationMarker?: boolean;  // 是否为截断标记
@@ -245,6 +251,16 @@ export interface ExtendedChatMessage extends ChatMessage {
     tokenUsage?: TokenUsage;
 }
 
+// 压缩后的检查点数据接口
+export interface CompressedCheckpointData {
+    compressed: boolean;
+    compressionRatio: number;
+    originalSize: number;
+    compressedSize: number;
+    messages?: ApiMessage[]; // 可选，用于即时访问
+    messagesJson: string; // 压缩后的JSON字符串
+}
+
 // 检查点接口
 export interface Checkpoint {
     id: string;
@@ -253,6 +269,11 @@ export interface Checkpoint {
     summary: string;
     createdAt: number;  // 时间戳（毫秒）
     tokenUsage: TokenUsage;
+    compressedData?: CompressedCheckpointData; // 压缩数据（可选）
+
+    // 新增字段
+    tags?: string[];      // 标签列表
+    isArchived?: boolean; // 是否已归档
 }
 
 // ============================================================================
@@ -261,7 +282,7 @@ export interface Checkpoint {
 
 // 流式事件类型
 export interface StreamEvent {
-    type: 'text_delta' | 'tool_use_start' | 'tool_use_delta' | 'tool_use_end' | 'message_end' | 'error';
+    type: 'text_delta' | 'tool_use_start' | 'tool_use_delta' | 'tool_use_end' | 'tool_result' | 'tool_error' | 'message_end' | 'error';
     // 文本增量
     textDelta?: string;
     // 工具调用（完整时才有）
@@ -270,8 +291,140 @@ export interface StreamEvent {
         name: string;
         input: any;
     };
+    // 工具结果（tool_result 事件）
+    result?: {
+        tool_use_id: string;
+        content: string;
+        is_error?: boolean;
+    };
     // 错误信息
     error?: string;
     // 最终消息（message_end 时）
     message?: ChatMessage;
+}
+
+// ============================================================================
+// Agent 循环相关类型定义
+// ============================================================================
+
+// 工具调用接口
+export interface ToolCall {
+    id: string;
+    name: string;
+    input: any;
+}
+
+// 工具结果接口
+export interface ToolResult {
+    tool_use_id: string;
+    name?: string;        // 工具名称
+    content: string;
+    is_error?: boolean;
+}
+
+// Agent 事件类型
+export type AgentEventType =
+    | 'text_delta'           // 文本增量
+    | 'tool_use_start'       // 工具开始
+    | 'tool_use_end'         // 工具调用结束（收集参数）
+    | 'tool_executing'       // 工具正在执行
+    | 'tool_executed'        // 工具执行完成（带结果）
+    | 'tool_error'           // 工具执行错误
+    | 'round_start'          // 新一轮开始
+    | 'round_end'            // 一轮结束
+    | 'agent_complete'       // Agent 循环完成
+    | 'error';               // 错误
+
+// Agent 流式事件
+export interface AgentStreamEvent {
+    type: AgentEventType;
+
+    // text_delta 事件
+    textDelta?: string;
+
+    // 工具相关事件
+    toolCall?: {
+        id: string;
+        name: string;
+        input: any;
+    };
+
+    // tool_executed/tool_error 事件
+    toolResult?: {
+        tool_use_id: string;
+        content: string;
+        is_error?: boolean;
+        duration?: number;
+    };
+
+    // round_start/round_end 事件
+    round?: number;
+
+    // agent_complete 事件
+    reason?: TerminationReason;
+    totalRounds?: number;
+    terminationMessage?: string;  // 可选的终止详情消息
+
+    // error 事件
+    error?: string;
+
+    // message_end 保留
+    message?: ChatMessage;
+}
+
+// Agent 循环配置
+export interface AgentLoopConfig {
+    maxRounds?: number;           // 最大轮数，默认 15
+    timeoutMs?: number;           // 默认 120000 (2分钟)
+    repeatThreshold?: number;     // 默认 3 次
+    failureThreshold?: number;    // 默认 2 次
+    enableTaskComplete?: boolean; // 默认 true
+    onRoundStart?: (round: number) => void;
+    onRoundEnd?: (round: number) => void;
+    onAgentComplete?: (reason: string, totalRounds: number) => void;
+}
+
+// ============================================================================
+// 智能 Agent 终止相关类型定义
+// ============================================================================
+
+// 终止原因枚举
+export type TerminationReason =
+    | 'task_complete'      // AI 主动调用 task_complete 工具
+    | 'no_tools'           // 本轮无工具调用
+    | 'summarizing'        // 检测到 AI 正在总结
+    | 'repeated_tool'      // 重复调用相同工具
+    | 'high_failure_rate'  // 连续失败率过高
+    | 'timeout'            // 总时间超时
+    | 'max_rounds'         // 达到最大轮数（安全保底）
+    | 'user_cancel';       // 用户取消
+
+// Agent 状态追踪
+export interface AgentState {
+    currentRound: number;
+    startTime: number;
+    toolCallHistory: ToolCallRecord[];
+    lastAiResponse: string;
+    isActive: boolean;
+}
+
+// 工具调用记录
+export interface ToolCallRecord {
+    name: string;
+    input: any;
+    inputHash: string;  // 用于快速比较
+    success: boolean;
+    timestamp: number;
+}
+
+// 终止检测结果
+export interface TerminationResult {
+    shouldTerminate: boolean;
+    reason: TerminationReason;
+    message?: string;
+}
+
+// 扩展 ToolResult 添加任务完成标记
+export interface ExtendedToolResult extends ToolResult {
+    isTaskComplete?: boolean;  // 特殊标记：task_complete 工具调用
 }

@@ -31,6 +31,7 @@ export interface ToolResult {
     tool_use_id: string;
     content: string;
     is_error?: boolean;
+    isTaskComplete?: boolean;  // 特殊标记：task_complete 工具调用
 }
 
 /**
@@ -39,8 +40,108 @@ export interface ToolResult {
  */
 @Injectable({ providedIn: 'root' })
 export class TerminalToolsService {
+    // ========== 智能等待配置 ==========
+    // 命令类型与预估等待时间映射（毫秒）
+    private readonly COMMAND_WAIT_TIMES: Record<string, number> = {
+        // 快速命令 (< 500ms)
+        'cd': 200,
+        'pwd': 200,
+        'echo': 200,
+        'set': 300,
+        'export': 200,
+        'cls': 100,
+        'clear': 100,
+        'date': 200,
+        'time': 200,
+
+        // 标准命令 (500-1500ms)
+        'dir': 500,
+        'ls': 500,
+        'cat': 500,
+        'type': 500,
+        'mkdir': 300,
+        'rm': 500,
+        'del': 500,
+        'copy': 800,
+        'xcopy': 1000,
+        'move': 800,
+        'ren': 300,
+        'rename': 300,
+        'tree': 1000,
+        'find': 600,
+        'grep': 500,
+        'head': 200,
+        'tail': 200,
+
+        // 慢速命令 (1500-5000ms)
+        'git': 3000,
+        'npm': 5000,
+        'yarn': 5000,
+        'pnpm': 5000,
+        'pip': 4000,
+        'conda': 3000,
+        'docker': 4000,
+        'kubectl': 3000,
+        'terraform': 4000,
+        'make': 2000,
+        'cmake': 3000,
+
+        // 非常慢的命令 (> 5000ms)
+        'systeminfo': 8000,
+        'ipconfig': 2000,
+        'ifconfig': 2000,
+        'netstat': 3000,
+        'ss': 2000,
+        'ping': 10000,
+        'tracert': 15000,
+        'tracepath': 10000,
+        'nslookup': 3000,
+        'dig': 3000,
+        'choco': 5000,
+        'scoop': 5000,
+        'apt-get': 5000,
+        'apt': 4000,
+        'yum': 5000,
+        'dnf': 5000,
+        'brew': 5000,
+        'pacman': 5000,
+
+        // 默认等待时间
+        '__default__': 1500
+    };
+
     // 工具定义
     private tools: ToolDefinition[] = [
+        // ========== 任务完成工具 ==========
+        {
+            name: 'task_complete',
+            description: `【重要】当你完成了用户请求的所有任务后，必须调用此工具来结束任务循环。
+调用此工具后，Agent 将停止继续执行，你的 summary 将作为最终回复展示给用户。
+使用场景：
+- 所有工具调用都成功完成
+- 遇到无法解决的问题需要停止
+- 用户请求已被完整满足
+注意：如果还有未完成的任务，请先完成它们再调用此工具。`,
+            input_schema: {
+                type: 'object',
+                properties: {
+                    summary: {
+                        type: 'string',
+                        description: '任务完成总结，描述做了什么、结果如何'
+                    },
+                    success: {
+                        type: 'boolean',
+                        description: '是否成功完成所有任务'
+                    },
+                    next_steps: {
+                        type: 'string',
+                        description: '可选，建议用户的后续操作'
+                    }
+                },
+                required: ['summary', 'success']
+            }
+        },
+        // ========== 终端操作工具 ==========
         {
             name: 'read_terminal_output',
             description: '读取指定终端的最近输出内容。用于获取命令执行结果或终端状态。',
@@ -150,8 +251,22 @@ export class TerminalToolsService {
 
         try {
             let result: string;
+            let isTaskComplete = false;
 
             switch (toolCall.name) {
+                // ========== 任务完成工具 ==========
+                case 'task_complete': {
+                    const input = toolCall.input;
+                    const successStatus = input.success ? '成功' : '未能';
+                    const nextStepsText = input.next_steps
+                        ? `\n\n建议后续操作：${input.next_steps}`
+                        : '';
+                    result = `任务${successStatus}完成。\n\n${input.summary}${nextStepsText}`;
+                    isTaskComplete = true;
+                    this.logger.info('Task completed via task_complete tool', { success: input.success });
+                    break;
+                }
+                // ========== 终端操作工具 ==========
                 case 'read_terminal_output':
                     result = this.readTerminalOutput(
                         toolCall.input.lines || 50,
@@ -185,7 +300,8 @@ export class TerminalToolsService {
 
             return {
                 tool_use_id: toolCall.id,
-                content: result
+                content: result,
+                isTaskComplete
             };
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -328,7 +444,7 @@ export class TerminalToolsService {
     }
 
     /**
-     * 写入终端 - 带执行反馈
+     * 写入终端 - 带执行反馈和智能等待
      */
     private async writeToTerminal(command: string, execute: boolean, terminalIndex?: number): Promise<string> {
         this.logger.info('writeToTerminal called', { command, execute, terminalIndex });
@@ -356,10 +472,16 @@ export class TerminalToolsService {
                 : '无法写入终端，请确保有活动的终端窗口');
         }
 
-        // 等待命令执行（给终端一些时间处理）
-        await new Promise(resolve => setTimeout(resolve, 800));
+        // ========== 智能等待机制 ==========
+        const baseCommand = this.extractBaseCommand(command);
+        const waitTime = this.getWaitTimeForCommand(baseCommand);
 
-        // 直接从 xterm buffer 读取（而非依赖订阅）
+        this.logger.info('Smart wait for command', { command, baseCommand, waitTime });
+
+        // 初始等待
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+
+        // 直接从 xterm buffer 读取
         const terminals = this.terminalManager.getAllTerminals();
         const terminal = terminalIndex !== undefined
             ? terminals[terminalIndex]
@@ -367,17 +489,66 @@ export class TerminalToolsService {
 
         let output = '(终端输出为空)';
         if (terminal) {
-            output = this.readFromXtermBuffer(terminal, 30);
+            output = this.readFromXtermBuffer(terminal, 50);
+
+            // 对于慢命令，轮询检查是否完成
+            if (waitTime >= 3000) {
+                let retryCount = 0;
+                const maxRetries = 3;
+
+                while (retryCount < maxRetries && !this.isCommandComplete(output)) {
+                    this.logger.info(`Command still running, retry ${retryCount + 1}/${maxRetries}`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    output = this.readFromXtermBuffer(terminal, 50);
+                    retryCount++;
+                }
+            }
         }
 
-        // 返回执行结果而非指导
+        // 返回执行结果
         return [
             `✅ 命令已执行: ${command}`,
+            `⏱️ 等待时间: ${waitTime}ms`,
             '',
             '=== 终端输出 ===',
             output,
             '=== 输出结束 ==='
         ].join('\n');
+    }
+
+    /**
+     * 提取命令基础名称
+     */
+    private extractBaseCommand(command: string): string {
+        const trimmed = command.trim().toLowerCase();
+        // 处理 Windows 路径 (如 C:\Windows\System32\systeminfo.exe)
+        const parts = trimmed.split(/[\s\/\\]+/);
+        const executable = parts[0].replace(/\.exe$/i, '');
+        // 移除常见前缀
+        return executable.replace(/^(winpty|busybox|gtimeout|command|-)/, '');
+    }
+
+    /**
+     * 获取命令等待时间
+     */
+    private getWaitTimeForCommand(baseCommand: string): number {
+        return this.COMMAND_WAIT_TIMES[baseCommand] || this.COMMAND_WAIT_TIMES['__default__'];
+    }
+
+    /**
+     * 检查命令是否完成（检测提示符）
+     */
+    private isCommandComplete(output: string): boolean {
+        const promptPatterns = [
+            /\n[A-Za-z]:.*>\s*$/,           // Windows: C:\Users\xxx>
+            /\$\s*$/,                       // Linux/Mac: $
+            /\n#\s*$/,                      // Root: #
+            /\n.*@.*:\~.*\$\s*$/,           // bash: user@host:~$
+            /PS\s+[A-Za-z]:.*>\s*$/,        // PowerShell: PS C:\>
+            /\[.*@\S+\s+.*\]\$\s*$/,        // modern bash
+        ];
+
+        return promptPatterns.some(pattern => pattern.test(output));
     }
 
     /**

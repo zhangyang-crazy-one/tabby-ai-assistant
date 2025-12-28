@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable, Observer } from 'rxjs';
 import { BaseAiProvider } from './base-provider.service';
-import { ProviderCapability, HealthStatus, ValidationResult } from '../../types/provider.types';
+import { ProviderCapability, ValidationResult } from '../../types/provider.types';
 import { ChatRequest, ChatResponse, StreamEvent, MessageRole, CommandRequest, CommandResponse, ExplainRequest, ExplainResponse, AnalysisRequest, AnalysisResponse } from '../../types/ai.types';
 import { LoggerService } from '../core/logger.service';
 
@@ -26,10 +26,6 @@ export class VllmProviderService extends BaseAiProvider {
 
     constructor(logger: LoggerService) {
         super(logger);
-    }
-
-    protected getDefaultBaseURL(): string {
-        return 'http://localhost:8000/v1';
     }
 
     /**
@@ -93,7 +89,7 @@ export class VllmProviderService extends BaseAiProvider {
     }
 
     /**
-     * 流式聊天
+     * 流式聊天功能 - 支持工具调用事件
      */
     chatStream(request: ChatRequest): Observable<StreamEvent> {
         return new Observable<StreamEvent>((subscriber: Observer<StreamEvent>) => {
@@ -127,9 +123,16 @@ export class VllmProviderService extends BaseAiProvider {
                         throw new Error('No response body');
                     }
 
+                    // 工具调用状态跟踪
+                    let currentToolCallId = '';
+                    let currentToolCallName = '';
+                    let currentToolInput = '';
+                    let currentToolIndex = -1;
                     let fullContent = '';
 
                     while (true) {
+                        if (abortController.signal.aborted) break;
+
                         const { done, value } = await reader.read();
                         if (done) break;
 
@@ -142,8 +145,62 @@ export class VllmProviderService extends BaseAiProvider {
 
                             try {
                                 const parsed = JSON.parse(data);
-                                const delta = parsed.choices[0]?.delta?.content;
-                                if (delta) {
+                                const choice = parsed.choices?.[0];
+
+                                this.logger.debug('Stream event', { type: 'delta', hasToolCalls: !!choice?.delta?.tool_calls });
+
+                                // 处理工具调用块
+                                if (choice?.delta?.tool_calls?.length > 0) {
+                                    for (const toolCall of choice.delta.tool_calls) {
+                                        const index = toolCall.index || 0;
+
+                                        // 新工具调用开始
+                                        if (currentToolIndex !== index) {
+                                            if (currentToolIndex >= 0) {
+                                                // 发送前一个工具调用的结束事件
+                                                let parsedInput = {};
+                                                try {
+                                                    parsedInput = JSON.parse(currentToolInput || '{}');
+                                                } catch (e) {
+                                                    // 使用原始输入
+                                                }
+                                                subscriber.next({
+                                                    type: 'tool_use_end',
+                                                    toolCall: {
+                                                        id: currentToolCallId,
+                                                        name: currentToolCallName,
+                                                        input: parsedInput
+                                                    }
+                                                });
+                                                this.logger.debug('Stream event', { type: 'tool_use_end', name: currentToolCallName });
+                                            }
+
+                                            currentToolIndex = index;
+                                            currentToolCallId = toolCall.id || `tool_${Date.now()}_${index}`;
+                                            currentToolCallName = toolCall.function?.name || '';
+                                            currentToolInput = toolCall.function?.arguments || '';
+
+                                            // 发送工具调用开始事件
+                                            subscriber.next({
+                                                type: 'tool_use_start',
+                                                toolCall: {
+                                                    id: currentToolCallId,
+                                                    name: currentToolCallName,
+                                                    input: {}
+                                                }
+                                            });
+                                            this.logger.debug('Stream event', { type: 'tool_use_start', name: currentToolCallName });
+                                        } else {
+                                            // 继续累积参数
+                                            if (toolCall.function?.arguments) {
+                                                currentToolInput += toolCall.function.arguments;
+                                            }
+                                        }
+                                    }
+                                }
+                                // 处理文本增量
+                                else if (choice?.delta?.content) {
+                                    const delta = choice.delta.content;
                                     fullContent += delta;
                                     subscriber.next({
                                         type: 'text_delta',
@@ -156,6 +213,25 @@ export class VllmProviderService extends BaseAiProvider {
                         }
                     }
 
+                    // 发送最后一个工具调用的结束事件
+                    if (currentToolIndex >= 0) {
+                        let parsedInput = {};
+                        try {
+                            parsedInput = JSON.parse(currentToolInput || '{}');
+                        } catch (e) {
+                            // 使用原始输入
+                        }
+                        subscriber.next({
+                            type: 'tool_use_end',
+                            toolCall: {
+                                id: currentToolCallId,
+                                name: currentToolCallName,
+                                input: parsedInput
+                            }
+                        });
+                        this.logger.debug('Stream event', { type: 'tool_use_end', name: currentToolCallName });
+                    }
+
                     subscriber.next({
                         type: 'message_end',
                         message: {
@@ -165,11 +241,14 @@ export class VllmProviderService extends BaseAiProvider {
                             timestamp: new Date()
                         }
                     });
+                    this.logger.debug('Stream event', { type: 'message_end', contentLength: fullContent.length });
                     subscriber.complete();
                 } catch (error) {
                     if ((error as any).name !== 'AbortError') {
+                        const errorMessage = `vLLM stream failed: ${error instanceof Error ? error.message : String(error)}`;
                         this.logError(error, { request });
-                        subscriber.error(new Error(`vLLM stream failed: ${error instanceof Error ? error.message : String(error)}`));
+                        subscriber.next({ type: 'error', error: errorMessage });
+                        subscriber.error(new Error(errorMessage));
                     }
                 }
             };
@@ -181,31 +260,36 @@ export class VllmProviderService extends BaseAiProvider {
         });
     }
 
-    /**
-     * 健康检查 - 检测 vLLM 服务是否运行
-     */
-    async healthCheck(): Promise<HealthStatus> {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+    protected async sendTestRequest(request: ChatRequest): Promise<ChatResponse> {
+        const response = await fetch(`${this.getBaseURL()}/chat/completions`, {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+            body: JSON.stringify({
+                model: this.config?.model || 'meta-llama/Llama-3.1-8B',
+                messages: this.transformMessages(request.messages),
+                max_tokens: request.maxTokens || 1,
+                temperature: request.temperature || 0
+            })
+        });
 
-            const response = await fetch(`${this.getBaseURL()}/models`, {
-                method: 'GET',
-                headers: this.getAuthHeaders(),
-                signal: controller.signal
-            });
-
-            clearTimeout(timeoutId);
-
-            if (response.ok) {
-                this.lastHealthCheck = { status: HealthStatus.HEALTHY, timestamp: new Date() };
-                return HealthStatus.HEALTHY;
-            }
-            return HealthStatus.DEGRADED;
-        } catch (error) {
-            this.logger.warn('vLLM health check failed', error);
-            return HealthStatus.UNHEALTHY;
+        if (!response.ok) {
+            throw new Error(`vLLM API error: ${response.status}`);
         }
+
+        const data = await response.json();
+        return {
+            message: {
+                id: this.generateId(),
+                role: MessageRole.ASSISTANT,
+                content: data.choices[0]?.message?.content || '',
+                timestamp: new Date()
+            },
+            usage: data.usage ? {
+                promptTokens: data.usage.prompt_tokens,
+                completionTokens: data.usage.completion_tokens,
+                totalTokens: data.usage.total_tokens
+            } : undefined
+        };
     }
 
     /**
@@ -303,161 +387,5 @@ export class VllmProviderService extends BaseAiProvider {
             role: msg.role === 'user' ? 'user' : 'assistant',
             content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
         }));
-    }
-
-    /**
-     * 构建命令生成提示
-     */
-    private buildCommandPrompt(request: CommandRequest): string {
-        let prompt = `请将以下自然语言描述转换为准确的终端命令：\n\n"${request.naturalLanguage}"\n\n`;
-
-        if (request.context) {
-            prompt += `当前环境：\n`;
-            if (request.context.currentDirectory) {
-                prompt += `- 当前目录：${request.context.currentDirectory}\n`;
-            }
-            if (request.context.operatingSystem) {
-                prompt += `- 操作系统：${request.context.operatingSystem}\n`;
-            }
-            if (request.context.shell) {
-                prompt += `- Shell：${request.context.shell}\n`;
-            }
-        }
-
-        prompt += `\n请直接返回JSON格式：\n`;
-        prompt += `{\n`;
-        prompt += `  "command": "具体命令",\n`;
-        prompt += `  "explanation": "命令解释",\n`;
-        prompt += `  "confidence": 0.95\n`;
-        prompt += `}\n`;
-
-        return prompt;
-    }
-
-    /**
-     * 构建命令解释提示
-     */
-    private buildExplainPrompt(request: ExplainRequest): string {
-        let prompt = `请详细解释以下终端命令：\n\n\`${request.command}\`\n\n`;
-
-        if (request.context?.currentDirectory) {
-            prompt += `当前目录：${request.context.currentDirectory}\n`;
-        }
-        if (request.context?.operatingSystem) {
-            prompt += `操作系统：${request.context.operatingSystem}\n`;
-        }
-
-        prompt += `\n请按以下JSON格式返回：\n`;
-        prompt += `{\n`;
-        prompt += `  "explanation": "整体解释",\n`;
-        prompt += `  "breakdown": [\n`;
-        prompt += `    {"part": "命令部分", "description": "说明"}\n`;
-        prompt += `  ],\n`;
-        prompt += `  "examples": ["使用示例"]\n`;
-        prompt += `}\n`;
-
-        return prompt;
-    }
-
-    /**
-     * 构建结果分析提示
-     */
-    private buildAnalysisPrompt(request: AnalysisRequest): string {
-        let prompt = `请分析以下命令执行结果：\n\n`;
-        prompt += `命令：${request.command}\n`;
-        prompt += `退出码：${request.exitCode}\n`;
-        prompt += `输出：\n${request.output}\n\n`;
-
-        if (request.context?.workingDirectory) {
-            prompt += `工作目录：${request.context.workingDirectory}\n`;
-        }
-
-        prompt += `\n请按以下JSON格式返回：\n`;
-        prompt += `{\n`;
-        prompt += `  "summary": "结果总结",\n`;
-        prompt += `  "insights": ["洞察1", "洞察2"],\n`;
-        prompt += `  "success": true/false,\n`;
-        prompt += `  "issues": [\n`;
-        prompt += `    {"severity": "warning|error|info", "message": "问题描述", "suggestion": "建议"}\n`;
-        prompt += `  ]\n`;
-        prompt += `}\n`;
-
-        return prompt;
-    }
-
-    /**
-     * 解析命令响应
-     */
-    private parseCommandResponse(content: string): CommandResponse {
-        try {
-            const match = content.match(/\{[\s\S]*\}/);
-            if (match) {
-                const parsed = JSON.parse(match[0]);
-                return {
-                    command: parsed.command || '',
-                    explanation: parsed.explanation || '',
-                    confidence: parsed.confidence || 0.5
-                };
-            }
-        } catch (error) {
-            this.logger.warn('Failed to parse vLLM command response as JSON', error);
-        }
-
-        const lines = content.split('\n').map(l => l.trim()).filter(l => l);
-        return {
-            command: lines[0] || '',
-            explanation: lines.slice(1).join(' ') || 'AI生成的命令',
-            confidence: 0.5
-        };
-    }
-
-    /**
-     * 解析解释响应
-     */
-    private parseExplainResponse(content: string): ExplainResponse {
-        try {
-            const match = content.match(/\{[\s\S]*\}/);
-            if (match) {
-                const parsed = JSON.parse(match[0]);
-                return {
-                    explanation: parsed.explanation || '',
-                    breakdown: parsed.breakdown || [],
-                    examples: parsed.examples || []
-                };
-            }
-        } catch (error) {
-            this.logger.warn('Failed to parse vLLM explain response as JSON', error);
-        }
-
-        return {
-            explanation: content,
-            breakdown: []
-        };
-    }
-
-    /**
-     * 解析分析响应
-     */
-    private parseAnalysisResponse(content: string): AnalysisResponse {
-        try {
-            const match = content.match(/\{[\s\S]*\}/);
-            if (match) {
-                const parsed = JSON.parse(match[0]);
-                return {
-                    summary: parsed.summary || '',
-                    insights: parsed.insights || [],
-                    success: parsed.success !== false,
-                    issues: parsed.issues || []
-                };
-            }
-        } catch (error) {
-            this.logger.warn('Failed to parse vLLM analysis response as JSON', error);
-        }
-
-        return {
-            summary: content,
-            insights: [],
-            success: true
-        };
     }
 }

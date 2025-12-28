@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewChecked, ViewEncapsulation } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { ChatMessage, MessageRole, StreamEvent } from '../../types/ai.types';
+import { ChatMessage, MessageRole, StreamEvent, AgentStreamEvent } from '../../types/ai.types';
 import { AiAssistantService } from '../../services/core/ai-assistant.service';
 import { ConfigProviderService } from '../../services/core/config-provider.service';
 import { LoggerService } from '../../services/core/logger.service';
@@ -191,7 +191,168 @@ export class ChatInterfaceComponent implements OnInit, OnDestroy, AfterViewCheck
     }
 
     /**
-     * 处理发送消息
+     * 处理发送消息（使用 Agent 循环模式）
+     */
+    async onSendMessageWithAgent(content: string): Promise<void> {
+        if (!content.trim() || this.isLoading) {
+            return;
+        }
+
+        // 添加用户消息
+        const userMessage: ChatMessage = {
+            id: this.generateId(),
+            role: MessageRole.USER,
+            content: content.trim(),
+            timestamp: new Date()
+        };
+        this.messages.push(userMessage);
+
+        // 滚动到底部
+        setTimeout(() => this.scrollToBottom(), 0);
+
+        // 清空输入框
+        content = '';
+
+        // 显示加载状态
+        this.isLoading = true;
+
+        // 创建一个临时的 AI 消息用于流式更新
+        const aiMessage: ChatMessage = {
+            id: this.generateId(),
+            role: MessageRole.ASSISTANT,
+            content: '',  // 初始为空
+            timestamp: new Date()
+        };
+        this.messages.push(aiMessage);
+
+        // 工具调用状态跟踪
+        const toolStatus = new Map<string, { name: string; startTime: number }>();
+
+        try {
+            // 使用 Agent 循环流式 API
+            this.aiService.chatStreamWithAgentLoop({
+                messages: this.messages.slice(0, -1),  // 排除刚添加的空 AI 消息
+                maxTokens: 2000,
+                temperature: 0.7
+            }, {
+                maxRounds: 5
+            }).pipe(
+                takeUntil(this.destroy$)
+            ).subscribe({
+                next: (event: AgentStreamEvent) => {
+                    switch (event.type) {
+                        case 'text_delta':
+                            // 流式显示文本
+                            if (event.textDelta) {
+                                aiMessage.content += event.textDelta;
+                                this.shouldScrollToBottom = true;
+                            }
+                            break;
+
+                        case 'tool_use_start':
+                            // 显示工具开始
+                            const toolName = event.toolCall?.name || 'unknown';
+                            aiMessage.content += `\n\n🔧 ${this.t.chatInterface.executingTool} ${toolName}...`;
+                            if (event.toolCall?.id) {
+                                toolStatus.set(event.toolCall.id, {
+                                    name: toolName,
+                                    startTime: Date.now()
+                                });
+                            }
+                            this.shouldScrollToBottom = true;
+                            break;
+
+                        case 'tool_executing':
+                            // 工具正在执行（额外状态）
+                            break;
+
+                        case 'tool_executed':
+                            // 工具执行完成 - 更新状态
+                            if (event.toolCall && event.toolResult) {
+                                const name = toolStatus.get(event.toolCall.id)?.name || event.toolCall.name || 'unknown';
+                                const duration = event.toolResult.duration || 0;
+
+                                // 替换等待提示为完成状态
+                                aiMessage.content = aiMessage.content.replace(
+                                    new RegExp(`🔧 ${this.t.chatInterface.executingTool} ${name}\\.\\.\\.`),
+                                    `✅ ${name} (${duration}ms)`
+                                );
+
+                                // 显示工具输出预览
+                                if (event.toolResult.content && !event.toolResult.is_error) {
+                                    const preview = event.toolResult.content.substring(0, 500);
+                                    const truncated = event.toolResult.content.length > 500 ? '...' : '';
+                                    aiMessage.content += `\n\n📋 **${this.t.chatInterface.toolOutput}**:\n\`\`\`\n${preview}${truncated}\n\`\`\``;
+                                }
+
+                                toolStatus.delete(event.toolCall.id);
+                            }
+                            this.shouldScrollToBottom = true;
+                            break;
+
+                        case 'tool_error':
+                            // 工具执行失败
+                            if (event.toolCall) {
+                                const name = toolStatus.get(event.toolCall.id)?.name || event.toolCall.name || 'unknown';
+                                aiMessage.content = aiMessage.content.replace(
+                                    new RegExp(`🔧 ${this.t.chatInterface.executingTool} ${name}\\.\\.\\.`),
+                                    `❌ ${name} ${this.t.chatInterface.toolFailed}: ${event.toolResult?.content || 'Unknown error'}`
+                                );
+                                toolStatus.delete(event.toolCall.id);
+                            }
+                            this.shouldScrollToBottom = true;
+                            break;
+
+                        case 'round_start':
+                            // 新一轮开始
+                            if (event.round && event.round > 1) {
+                                aiMessage.content += '\n\n---\n\n';
+                            }
+                            break;
+
+                        case 'round_end':
+                            // 一轮结束
+                            break;
+
+                        case 'agent_complete':
+                            // Agent 循环完成
+                            this.logger.info('Agent completed', {
+                                reason: event.reason,
+                                totalRounds: event.totalRounds
+                            });
+                            break;
+
+                        case 'error':
+                            // 错误
+                            aiMessage.content += `\n\n❌ ${this.t.chatInterface.errorPrefix}: ${event.error}`;
+                            this.shouldScrollToBottom = true;
+                            break;
+                    }
+                },
+                error: (error) => {
+                    this.logger.error('Agent stream error', error);
+                    aiMessage.content += `\n\n❌ ${this.t.chatInterface.errorPrefix}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+                    this.isLoading = false;
+                    this.shouldScrollToBottom = true;
+                    this.saveChatHistory();
+                },
+                complete: () => {
+                    this.isLoading = false;
+                    this.saveChatHistory();
+                    this.shouldScrollToBottom = true;
+                }
+            });
+
+        } catch (error) {
+            this.logger.error('Failed to send message with agent', error);
+            aiMessage.content = `${this.t.chatInterface.errorPrefix}: ${error instanceof Error ? error.message : 'Unknown error'}\n\n${this.t.chatInterface.tipShortcut}`;
+            this.isLoading = false;
+            setTimeout(() => this.scrollToBottom(), 0);
+        }
+    }
+
+    /**
+     * 处理发送消息（原有方法，保留兼容性）
      */
     async onSendMessage(content: string): Promise<void> {
         if (!content.trim() || this.isLoading) {
@@ -225,6 +386,10 @@ export class ChatInterfaceComponent implements OnInit, OnDestroy, AfterViewCheck
         };
         this.messages.push(aiMessage);
 
+        // 工具调用状态跟踪
+        let pendingToolCalls: Map<string, { name: string; startTime: number }> = new Map();
+        let toolResultsToAppend: string[] = [];
+
         try {
             // 使用流式 API
             this.aiService.chatStream({
@@ -242,18 +407,73 @@ export class ChatInterfaceComponent implements OnInit, OnDestroy, AfterViewCheck
                     }
                     // 工具调用开始 - 显示提示
                     else if (event.type === 'tool_use_start') {
-                        aiMessage.content += `\n\n🔧 ${this.t.chatInterface.executingTool}`;
+                        const toolName = event.toolCall?.name ? ` (${event.toolCall.name})` : '';
+                        aiMessage.content += `\n\n🔧 ${this.t.chatInterface.executingTool}${toolName}...`;
+
+                        // 记录待执行的工具
+                        if (event.toolCall?.id) {
+                            pendingToolCalls.set(event.toolCall.id, {
+                                name: event.toolCall.name || 'unknown',
+                                startTime: Date.now()
+                            });
+                        }
                         this.shouldScrollToBottom = true;
                     }
                     // 工具调用完成 - 更新状态
                     else if (event.type === 'tool_use_end') {
-                        aiMessage.content = aiMessage.content.replace(`🔧 ${this.t.chatInterface.executingTool}`, `✅ ${this.t.chatInterface.toolComplete}`);
+                        if (event.toolCall) {
+                            const toolInfo = pendingToolCalls.get(event.toolCall.id);
+                            const duration = toolInfo ? Date.now() - toolInfo.startTime : 0;
+                            const toolName = toolInfo?.name || event.toolCall.name || 'unknown';
+
+                            // 替换等待提示为完成状态
+                            aiMessage.content = aiMessage.content.replace(
+                                /🔧 正在执行工具.*?\.\.\./g,
+                                `✅ ${toolName} 完成`
+                            );
+
+                            pendingToolCalls.delete(event.toolCall.id);
+                        }
                         this.shouldScrollToBottom = true;
                     }
-                    // 消息结束
+                    // 工具结果 - 追加到消息
+                    else if (event.type === 'tool_result' && event.result) {
+                        const isError = event.result.is_error;
+                        const icon = isError ? '❌' : '📋';
+                        const header = isError ? '**工具执行失败**' : '**工具输出**';
+
+                        // 截断过长的结果
+                        const maxPreviewLength = 800;
+                        let resultPreview = event.result.content;
+                        const isTruncated = resultPreview.length > maxPreviewLength;
+                        if (isTruncated) {
+                            resultPreview = resultPreview.substring(0, maxPreviewLength) + '\n...(已截断)';
+                        }
+
+                        // 格式化工具结果
+                        const formattedResult = `\n\n${icon} ${header}:\n\`\`\`\n${resultPreview}\n\`\`\``;
+                        toolResultsToAppend.push(formattedResult);
+                        this.shouldScrollToBottom = true;
+                    }
+                    // 工具错误
+                    else if (event.type === 'tool_error' && event.error) {
+                        aiMessage.content = aiMessage.content.replace(
+                            /🔧 正在执行工具.*?\.\.\./g,
+                            `❌ 工具执行失败: ${event.error}`
+                        );
+                        this.shouldScrollToBottom = true;
+                    }
+                    // 消息结束 - 附加所有工具结果
                     else if (event.type === 'message_end') {
                         this.logger.info('Stream completed');
+
+                        // 附加所有工具结果
+                        if (toolResultsToAppend.length > 0) {
+                            aiMessage.content += toolResultsToAppend.join('');
+                        }
+
                         this.playNotificationSound();
+                        this.shouldScrollToBottom = true;
                     }
                 },
                 error: (error) => {

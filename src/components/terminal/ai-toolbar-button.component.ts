@@ -1,4 +1,5 @@
 import { Component, Input } from '@angular/core';
+import { AiSidebarService } from '../../services/chat/ai-sidebar.service';
 
 /**
  * AI工具栏按钮组件
@@ -14,8 +15,9 @@ export class AiToolbarButtonComponent {
     @Input() tooltip: string = 'Open AI Assistant';
     @Input() showLabel: boolean = true;
 
+    constructor(private sidebarService: AiSidebarService) {}
+
     onClick(): void {
-        // TODO: 触发打开AI助手
-        console.log('AI Assistant button clicked');
+        this.sidebarService.toggle();
     }
 }

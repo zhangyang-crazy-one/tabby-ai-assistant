@@ -121,8 +121,7 @@ export function validateModel(model: string, _provider: string): { valid: boolea
         return { valid: false, error: '模型名称包含非法字符' };
     }
 
-    // TODO: 根据提供商类型进行特定验证
-    // _provider 参数保留用于未来扩展
+    // 注意：更完整的提供商特定验证请使用 validateProviderModel()
 
     return { valid: true };
 }
@@ -311,4 +310,309 @@ export function validateFilePath(path: string): { valid: boolean; error?: string
     }
 
     return { valid: true };
+}
+
+// ==================== AI提供商特定验证 ====================
+
+/**
+ * AI提供商类型
+ */
+export type AIProviderType = 'openai' | 'anthropic' | 'minimax' | 'glm' | 'openai-compatible' | 'ollama' | 'vllm';
+
+/**
+ * OpenAI模型列表
+ */
+export const OPENAI_MODELS = [
+    'gpt-4',
+    'gpt-4-turbo',
+    'gpt-4o',
+    'gpt-4o-mini',
+    'gpt-3.5-turbo',
+    'gpt-3.5-turbo-16k'
+];
+
+/**
+ * Anthropic模型列表
+ */
+export const ANTHROPIC_MODELS = [
+    'claude-3-5-sonnet-20241022',
+    'claude-3-5-sonnet-20240620',
+    'claude-3-opus-20240229',
+    'claude-3-haiku-20240307'
+];
+
+/**
+ * GLM/智谱模型列表
+ */
+export const GLM_MODELS = [
+    'glm-4',
+    'glm-4-plus',
+    'glm-4v',
+    'glm-3-turbo'
+];
+
+/**
+ * Minimax模型列表
+ */
+export const MINIMAX_MODELS = [
+    'MiniMax-M2',
+    'MiniMax-M2-16k',
+    'abab6.5s-chat',
+    'abab6.5-chat',
+    'abab5.5-chat'
+];
+
+/**
+ * 验证AI提供商配置
+ */
+export function validateProviderConfig(
+    provider: AIProviderType,
+    config: {
+        apiKey?: string;
+        baseURL?: string;
+        model?: string;
+    }
+): { valid: boolean; errors?: string[]; warnings?: string[] } {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    // 验证API密钥
+    if (!config.apiKey || config.apiKey.trim().length === 0) {
+        errors.push('API密钥不能为空');
+    } else {
+        const keyValidation = validateProviderApiKey(provider, config.apiKey);
+        if (!keyValidation.valid) {
+            errors.push(keyValidation.error || 'API密钥格式无效');
+        }
+    }
+
+    // 验证模型
+    if (config.model) {
+        const modelValidation = validateProviderModel(provider, config.model);
+        if (!modelValidation.valid) {
+            errors.push(modelValidation.error || '模型名称无效');
+        } else if (modelValidation.warning) {
+            warnings.push(modelValidation.warning);
+        }
+    } else {
+        warnings.push(`未指定模型，${provider}将使用默认模型`);
+    }
+
+    // 验证基础URL（对于需要自定义URL的提供商）
+    if (needsCustomBaseURL(provider)) {
+        if (!config.baseURL || config.baseURL.trim().length === 0) {
+            warnings.push(`未指定基础URL，将使用${provider}的默认端点`);
+        } else {
+            const urlValidation = validateUrl(config.baseURL);
+            if (!urlValidation.valid) {
+                errors.push(`基础URL无效: ${urlValidation.error}`);
+            }
+        }
+    }
+
+    return {
+        valid: errors.length === 0,
+        errors: errors.length > 0 ? errors : undefined,
+        warnings: warnings.length > 0 ? warnings : undefined
+    };
+}
+
+/**
+ * 验证提供商API密钥格式
+ */
+export function validateProviderApiKey(
+    provider: AIProviderType,
+    apiKey: string
+): { valid: boolean; error?: string } {
+    const trimmedKey = apiKey.trim();
+
+    switch (provider) {
+        case 'openai':
+            if (!trimmedKey.startsWith('sk-')) {
+                return { valid: false, error: 'OpenAI API密钥应以 sk- 开头' };
+            }
+            if (trimmedKey.length < 50) {
+                return { valid: false, error: 'OpenAI API密钥长度不足' };
+            }
+            break;
+
+        case 'anthropic':
+            if (!trimmedKey.startsWith('sk-ant-')) {
+                return { valid: false, error: 'Anthropic API密钥应以 sk-ant- 开头' };
+            }
+            if (trimmedKey.length < 50) {
+                return { valid: false, error: 'Anthropic API密钥长度不足' };
+            }
+            break;
+
+        case 'minimax':
+            if (trimmedKey.length < 20) {
+                return { valid: false, error: 'Minimax API密钥长度不足' };
+            }
+            // Minimax密钥通常以sk-开头
+            if (!trimmedKey.startsWith('sk-')) {
+                return { valid: false, error: 'Minimax API密钥应以 sk- 开头' };
+            }
+            break;
+
+        case 'glm':
+            if (trimmedKey.length < 20) {
+                return { valid: false, error: 'GLM API密钥长度不足' };
+            }
+            break;
+
+        case 'openai-compatible':
+            // 兼容模式不验证具体格式
+            if (trimmedKey.length < 10) {
+                return { valid: false, error: 'API密钥长度不足' };
+            }
+            break;
+
+        case 'ollama':
+            // Ollama本地服务通常不需要API密钥
+            break;
+
+        case 'vllm':
+            // vLLM可能有basic auth或无认证
+            break;
+    }
+
+    return { valid: true };
+}
+
+/**
+ * 验证提供商模型名称
+ */
+export function validateProviderModel(
+    provider: AIProviderType,
+    model: string
+): { valid: boolean; error?: string; warning?: string } {
+    const trimmedModel = model.trim();
+
+    if (!trimmedModel) {
+        return { valid: false, error: '模型名称不能为空' };
+    }
+
+    // 检查模型名称格式
+    if (!/^[a-zA-Z0-9._-/]+$/.test(trimmedModel)) {
+        return { valid: false, error: '模型名称包含非法字符' };
+    }
+
+    // 检查是否在已知模型列表中
+    const isKnownModel = isKnownModelForProvider(provider, trimmedModel);
+    if (!isKnownModel) {
+        return {
+            valid: true,
+            warning: `模型 "${trimmedModel}" 不在${provider}的官方模型列表中`
+        };
+    }
+
+    return { valid: true };
+}
+
+/**
+ * 检查模型是否在提供商的已知模型列表中
+ */
+function isKnownModelForProvider(provider: AIProviderType, model: string): boolean {
+    const normalizedModel = model.toLowerCase();
+
+    switch (provider) {
+        case 'openai':
+            return OPENAI_MODELS.some(m => m.toLowerCase() === normalizedModel);
+
+        case 'anthropic':
+            return ANTHROPIC_MODELS.some(m => m.toLowerCase() === normalizedModel);
+
+        case 'glm':
+            return GLM_MODELS.some(m => m.toLowerCase() === normalizedModel);
+
+        case 'minimax':
+            return MINIMAX_MODELS.some(m => m.toLowerCase() === normalizedModel);
+
+        case 'openai-compatible':
+        case 'ollama':
+        case 'vllm':
+            // 这些提供商支持自定义模型名称
+            return true;
+
+        default:
+            return true;
+    }
+}
+
+/**
+ * 检查提供商是否需要自定义基础URL
+ */
+export function needsCustomBaseURL(provider: AIProviderType): boolean {
+    return ['openai-compatible', 'ollama', 'vllm'].includes(provider);
+}
+
+/**
+ * 获取提供商的默认基础URL
+ */
+export function getProviderDefaultBaseURL(provider: AIProviderType): string {
+    switch (provider) {
+        case 'openai':
+            return 'https://api.openai.com/v1';
+
+        case 'anthropic':
+            return 'https://api.anthropic.com';
+
+        case 'minimax':
+            return 'https://api.minimax.chat';
+
+        case 'glm':
+            return 'https://open.bigmodel.cn/api/paas/v4';
+
+        case 'openai-compatible':
+            return '';
+
+        case 'ollama':
+            return 'http://localhost:11434';
+
+        case 'vllm':
+            return 'http://localhost:8000';
+
+        default:
+            return '';
+    }
+}
+
+/**
+ * 验证本地服务连接（用于Ollama、vLLM等本地提供商）
+ */
+export async function validateLocalServiceConnection(
+    baseURL: string,
+    timeout: number = 5000
+): Promise<{ valid: boolean; error?: string; latency?: number }> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+        const start = Date.now();
+        const response = await fetch(`${baseURL}/models`, {
+            method: 'GET',
+            signal: controller.signal
+        });
+        const latency = Date.now() - start;
+
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+            return { valid: true, latency };
+        }
+
+        return { valid: false, error: `服务返回状态码 ${response.status}` };
+    } catch (error) {
+        clearTimeout(timeoutId);
+
+        if (error instanceof Error) {
+            if (error.name === 'AbortError') {
+                return { valid: false, error: '连接超时' };
+            }
+            return { valid: false, error: error.message };
+        }
+
+        return { valid: false, error: '无法连接到服务' };
+    }
 }

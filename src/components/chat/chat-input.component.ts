@@ -2,6 +2,7 @@ import { Component, Output, EventEmitter, Input, ViewChild, ElementRef, OnInit, 
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { ConfigProviderService } from '../../services/core/config-provider.service';
+import { AiAssistantService } from '../../services/core/ai-assistant.service';
 
 @Component({
     selector: 'app-chat-input',
@@ -22,7 +23,14 @@ export class ChatInputComponent implements OnInit, OnDestroy {
     isComposing = false; // 用于处理中文输入法
     enterToSend: boolean = true; // Enter键发送
 
-    constructor(private config: ConfigProviderService) {}
+    // 智能建议相关
+    suggestions: string[] = [];
+    showSuggestions = false;
+
+    constructor(
+        private config: ConfigProviderService,
+        private aiService: AiAssistantService
+    ) {}
 
     ngOnInit(): void {
         // 读取 Enter 发送设置
@@ -45,10 +53,34 @@ export class ChatInputComponent implements OnInit, OnDestroy {
 
     /**
      * 处理输入变化
+     * 实现智能建议功能
      */
-    onInputChange(value: string): void {
-        // TODO: 实现智能建议功能
-        // 可以基于输入内容提供命令建议
+    async onInputChange(value: string): Promise<void> {
+        if (value.length < 2) {
+            this.suggestions = [];
+            this.showSuggestions = false;
+            return;
+        }
+
+        // 调用已实现的智能建议服务
+        this.suggestions = await this.aiService.getSuggestedCommands(value);
+        this.showSuggestions = this.suggestions.length > 0;
+    }
+
+    /**
+     * 选择建议
+     */
+    selectSuggestion(suggestion: string): void {
+        this.inputValue = suggestion;
+        this.showSuggestions = false;
+        this.focus();
+    }
+
+    /**
+     * 关闭建议
+     */
+    dismissSuggestions(): void {
+        this.showSuggestions = false;
     }
 
     /**

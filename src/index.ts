@@ -43,9 +43,6 @@ import { CommandGeneratorService } from './services/chat/command-generator.servi
 import { AiSidebarService } from './services/chat/ai-sidebar.service';
 
 // Terminal Services
-import { CommandAnalyzerService } from './services/terminal/command-analyzer.service';
-import { ContextMenuService } from './services/terminal/context-menu.service';
-import { HotkeyService } from './services/terminal/hotkey.service';
 import { TerminalManagerService } from './services/terminal/terminal-manager.service';
 
 // Context Engineering Services
@@ -136,9 +133,6 @@ import { AiHotkeyProvider } from './providers/tabby/ai-hotkey.provider';
         AiSidebarService,
 
         // Terminal Services
-        CommandAnalyzerService,
-        ContextMenuService,
-        HotkeyService,
         TerminalManagerService,
 
         // Context Engineering Services

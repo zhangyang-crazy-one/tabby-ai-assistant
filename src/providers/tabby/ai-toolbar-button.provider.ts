@@ -45,10 +45,14 @@ export class AiToolbarButtonProvider extends ToolbarButtonProvider {
 
     /**
      * 打开设置页面
+     * 注意：设置页面通过 Tabby 设置菜单访问，用户可手动导航到"AI 助手"设置
      */
     private openSettings(): void {
-        // TODO: 实现打开设置页面的逻辑
-        // 可以通过事件或服务来触发设置页面显示
-        console.log('Opening AI settings...');
+        // 提示用户通过 Tabby 设置访问
+        // 设置标签页 ID 为 'ai-assistant'
+        this.app.openNewTab({
+            type: 'settings' as any,
+            inputs: { focusSection: 'ai-assistant' }
+        });
     }
 }

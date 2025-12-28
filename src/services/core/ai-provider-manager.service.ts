@@ -1,7 +1,16 @@
 import { Injectable } from '@angular/core';
 import { Subject, Observable } from 'rxjs';
-import { BaseAiProvider, ProviderManager, ProviderInfo, ProviderEvent } from '../../types/provider.types';
+import { BaseAiProvider, ProviderManager, ProviderInfo, ProviderEvent, HealthStatus } from '../../types/provider.types';
 import { LoggerService } from './logger.service';
+
+/**
+ * 健康检查缓存项
+ */
+interface HealthCheckCacheItem {
+    status: HealthStatus;
+    latency: number;
+    timestamp: number;
+}
 
 /**
  * AI提供商管理器
@@ -12,6 +21,14 @@ export class AiProviderManagerService implements ProviderManager {
     private providers = new Map<string, BaseAiProvider>();
     private activeProvider: string | null = null;
     private eventSubject = new Subject<ProviderEvent>();
+
+    // 健康检查缓存
+    private healthCache = new Map<string, HealthCheckCacheItem>();
+    private readonly HEALTH_CACHE_TTL = 60000; // 缓存有效期：60秒
+    private readonly HEALTH_CHECK_TIMEOUT = 10000; // 健康检查超时：10秒
+
+    // 正在进行的健康检查（防止并发重复检查）
+    private pendingHealthChecks = new Map<string, Promise<HealthStatus>>();
 
     constructor(private logger: LoggerService) {}
 
@@ -174,31 +191,137 @@ export class AiProviderManagerService implements ProviderManager {
     }
 
     /**
-     * 检查所有提供商健康状态
+     * 检查所有提供商健康状态（使用缓存）
      */
-    async checkAllProvidersHealth(): Promise<{ provider: string; status: string; latency?: number }[]> {
-        const results: { provider: string; status: string; latency?: number }[] = [];
+    async checkAllProvidersHealth(forceRefresh: boolean = false): Promise<{ provider: string; status: HealthStatus; latency?: number; cached?: boolean }[]> {
+        const results: { provider: string; status: HealthStatus; latency?: number; cached?: boolean }[] = [];
 
-        for (const [name, provider] of this.providers) {
-            try {
-                const start = Date.now();
-                const health = await provider.healthCheck();
-                const latency = Date.now() - start;
+        // 并行执行所有健康检查
+        const checks = Array.from(this.providers.entries()).map(async ([name, provider]) => {
+            const healthStatus = await this.getProviderHealthStatus(name, forceRefresh);
+            const cachedItem = this.healthCache.get(name);
 
-                results.push({
-                    provider: name,
-                    status: health,
-                    latency
-                });
-            } catch (error) {
-                results.push({
-                    provider: name,
-                    status: 'unhealthy'
-                });
+            return {
+                provider: name,
+                status: healthStatus,
+                latency: cachedItem?.latency,
+                cached: cachedItem && !forceRefresh && (Date.now() - cachedItem.timestamp) < this.HEALTH_CACHE_TTL
+            };
+        });
+
+        const settledResults = await Promise.allSettled(checks);
+
+        for (const result of settledResults) {
+            if (result.status === 'fulfilled') {
+                results.push(result.value);
             }
         }
 
         return results;
+    }
+
+    /**
+     * 获取单个提供商的健康状态（使用缓存）
+     */
+    async getProviderHealthStatus(providerName: string, forceRefresh: boolean = false): Promise<HealthStatus> {
+        const provider = this.providers.get(providerName);
+        if (!provider) {
+            return HealthStatus.UNHEALTHY;
+        }
+
+        // 检查缓存是否有效
+        if (!forceRefresh) {
+            const cached = this.healthCache.get(providerName);
+            if (cached && (Date.now() - cached.timestamp) < this.HEALTH_CACHE_TTL) {
+                this.logger.debug(`Health check cache hit for ${providerName}`);
+                return cached.status;
+            }
+        }
+
+        // 检查是否已有正在进行的健康检查
+        if (this.pendingHealthChecks.has(providerName)) {
+            this.logger.debug(`Health check already in progress for ${providerName}`);
+            return this.pendingHealthChecks.get(providerName)!;
+        }
+
+        // 执行新的健康检查
+        const healthCheckPromise = this.executeHealthCheck(provider);
+        this.pendingHealthChecks.set(providerName, healthCheckPromise);
+
+        try {
+            const status = await Promise.race([
+                healthCheckPromise,
+                new Promise<HealthStatus>(resolve => {
+                    setTimeout(() => resolve(HealthStatus.DEGRADED), this.HEALTH_CHECK_TIMEOUT);
+                })
+            ]);
+
+            // 更新缓存
+            this.updateHealthCache(providerName, status);
+
+            return status;
+        } finally {
+            this.pendingHealthChecks.delete(providerName);
+        }
+    }
+
+    /**
+     * 执行健康检查（内部方法）
+     */
+    private async executeHealthCheck(provider: BaseAiProvider): Promise<HealthStatus> {
+        const start = Date.now();
+        try {
+            const status = await provider.healthCheck();
+            const latency = Date.now() - start;
+            this.logger.debug(`Health check completed for ${provider.name}`, { status, latency });
+            return status;
+        } catch (error) {
+            this.logger.warn(`Health check failed for ${provider.name}`, error);
+            return HealthStatus.UNHEALTHY;
+        }
+    }
+
+    /**
+     * 更新健康检查缓存
+     */
+    private updateHealthCache(providerName: string, status: HealthStatus): void {
+        const provider = this.providers.get(providerName);
+        if (!provider) return;
+
+        const cachedItem = this.healthCache.get(providerName);
+        this.healthCache.set(providerName, {
+            status,
+            latency: cachedItem?.latency || 0,
+            timestamp: Date.now()
+        });
+    }
+
+    /**
+     * 清除健康检查缓存
+     */
+    clearHealthCache(): void {
+        this.healthCache.clear();
+        this.logger.info('Health check cache cleared');
+    }
+
+    /**
+     * 清除指定提供商的健康检查缓存
+     */
+    clearProviderHealthCache(providerName: string): void {
+        this.healthCache.delete(providerName);
+        this.logger.debug(`Health check cache cleared for ${providerName}`);
+    }
+
+    /**
+     * 获取健康检查缓存状态
+     */
+    getHealthCacheStatus(): { provider: string; cached: boolean; age: number }[] {
+        const now = Date.now();
+        return Array.from(this.healthCache.entries()).map(([name, item]) => ({
+            provider: name,
+            cached: true,
+            age: now - item.timestamp
+        }));
     }
 
     /**
@@ -288,18 +411,22 @@ export class AiProviderManagerService implements ProviderManager {
         totalProviders: number;
         enabledProviders: number;
         activeProvider: string | null;
-        providers: { name: string; enabled: boolean; healthy: boolean }[];
+        providers: { name: string; enabled: boolean; healthy: boolean; cached?: boolean }[];
     } {
         const providers = this.getAllProviders();
         return {
             totalProviders: providers.length,
             enabledProviders: this.getEnabledProviders().length,
             activeProvider: this.activeProvider,
-            providers: providers.map(p => ({
-                name: p.name,
-                enabled: p.getConfig()?.enabled !== false,
-                healthy: true // TODO: 实现健康检查缓存
-            }))
+            providers: providers.map(p => {
+                const cached = this.healthCache.get(p.name);
+                return {
+                    name: p.name,
+                    enabled: p.getConfig()?.enabled !== false,
+                    healthy: cached?.status === HealthStatus.HEALTHY,
+                    cached: !!cached
+                };
+            })
         };
     }
 
@@ -309,6 +436,8 @@ export class AiProviderManagerService implements ProviderManager {
     reset(): void {
         this.providers.clear();
         this.activeProvider = null;
+        this.healthCache.clear();
+        this.pendingHealthChecks.clear();
         this.logger.info('All providers reset');
     }
 }

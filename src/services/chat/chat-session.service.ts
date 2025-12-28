@@ -6,6 +6,7 @@ import { LoggerService } from '../core/logger.service';
 import { ConfigProviderService } from '../core/config-provider.service';
 import { ChatHistoryService } from './chat-history.service';
 import { ContextManager } from '../context/manager';
+import { CheckpointManager } from '../core/checkpoint.service';
 
 /**
  * 聊天会话服务
@@ -31,7 +32,8 @@ export class ChatSessionService {
         private logger: LoggerService,
         private chatHistoryService: ChatHistoryService,
         private contextManager: ContextManager,
-        private configService: ConfigProviderService
+        private configService: ConfigProviderService,
+        private checkpointManager: CheckpointManager
     ) { }
 
     /**
@@ -46,10 +48,34 @@ export class ChatSessionService {
 
     /**
      * 切换到指定会话
+     * 从存储中加载会话历史
      */
     switchToSession(sessionId: string): void {
         this.currentSessionId = sessionId;
-        // TODO: 从存储中加载会话历史
+
+        // 从 ChatHistoryService 加载会话历史
+        const sessionData = this.chatHistoryService.loadSession(sessionId);
+
+        if (sessionData && sessionData.messages && sessionData.messages.length > 0) {
+            // 恢复消息历史
+            const chatMessages: ChatMessage[] = sessionData.messages.map((msg, index) => ({
+                id: msg.id || `msg_${sessionId}_${index}`,
+                role: msg.role,
+                content: msg.content,
+                timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp || Date.now())
+            }));
+
+            this.messagesSubject.next(chatMessages);
+            this.logger.info('Loaded session history', {
+                sessionId,
+                messageCount: chatMessages.length
+            });
+        } else {
+            // 新会话，清空当前消息
+            this.messagesSubject.next([]);
+            this.logger.info('Started new session', { sessionId });
+        }
+
         this.logger.info('Switched to session', { sessionId });
     }
 
@@ -325,17 +351,15 @@ export class ChatSessionService {
     /**
      * 压缩存储检查点
      */
-    compressCheckpoint(checkpointId: string): Checkpoint {
-        const checkpoint = this.getCheckpoint(checkpointId);
-        if (!checkpoint) {
-            throw new Error(`Checkpoint not found: ${checkpointId}`);
+    async compressCheckpoint(checkpointId: string): Promise<void> {
+        try {
+            // 使用 CheckpointManager 的压缩功能
+            await this.checkpointManager.compressForCheckpoint(checkpointId);
+            this.logger.info('Checkpoint compressed', { checkpointId });
+        } catch (error) {
+            this.logger.error('Failed to compress checkpoint', { checkpointId, error });
+            throw error;
         }
-
-        // TODO: 实现检查点压缩逻辑
-        // 这里先返回原检查点，实际实现中可以使用 ContextManager 进行压缩
-        this.logger.info('Checkpoint compressed', { checkpointId });
-
-        return checkpoint;
     }
 
     /**

@@ -1,4 +1,4 @@
-import { Injectable, ComponentFactoryResolver, ApplicationRef, Injector, EmbeddedViewRef, ComponentRef } from '@angular/core';
+import { Injectable, ComponentFactoryResolver, ApplicationRef, Injector, EmbeddedViewRef, ComponentRef, EnvironmentInjector, createComponent } from '@angular/core';
 import { ConfigService } from 'tabby-core';
 import { AiSidebarComponent } from '../../components/chat/ai-sidebar.component';
 
@@ -16,7 +16,7 @@ export interface AiSidebarConfig {
 
 /**
  * AI Sidebar 服务 - 管理 AI 聊天侧边栏的生命周期
- * 
+ *
  * 采用 Flexbox 布局方式，将 sidebar 插入到 app-root 作为第一个子元素，
  * app-root 变为水平 flex 容器，sidebar 在左侧
  */
@@ -46,6 +46,7 @@ export class AiSidebarService {
         private componentFactoryResolver: ComponentFactoryResolver,
         private appRef: ApplicationRef,
         private injector: Injector,
+        private environmentInjector: EnvironmentInjector,
         private config: ConfigService,
     ) { }
 
@@ -121,9 +122,12 @@ export class AiSidebarService {
      * 这样不改变任何现有元素的 flex 布局
      */
     private createSidebar(): void {
-        // 创建组件
-        const componentFactory = this.componentFactoryResolver.resolveComponentFactory(AiSidebarComponent);
-        this.sidebarComponentRef = componentFactory.create(this.injector);
+        // 使用 createComponent API (Angular 14+)，传入 EnvironmentInjector
+        // 这确保组件能正确解析所有 root 级服务依赖
+        this.sidebarComponentRef = createComponent(AiSidebarComponent, {
+            environmentInjector: this.environmentInjector,
+            elementInjector: this.injector
+        });
 
         // 附加到应用
         this.appRef.attachView(this.sidebarComponentRef.hostView);

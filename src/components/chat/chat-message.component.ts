@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation } from '@angular/core';
 import { ChatMessage } from '../../types/ai.types';
+import { ToastService } from '../../services/core/toast.service';
 
 @Component({
     selector: 'app-chat-message',
@@ -14,6 +15,8 @@ export class ChatMessageComponent {
     @Input() isGrouped = false; // 是否与上一条消息分组
     @Output() messageClick = new EventEmitter<ChatMessage>();
     @Output() messageAction = new EventEmitter<{ action: string; message: ChatMessage }>();
+
+    constructor(private toastService: ToastService) {}
 
     /**
      * 处理消息点击
@@ -34,7 +37,9 @@ export class ChatMessageComponent {
      */
     copyMessage(): void {
         navigator.clipboard.writeText(this.message.content).then(() => {
-            // TODO: 显示复制成功提示
+            this.toastService.success('已复制到剪贴板', 2000);
+        }).catch(error => {
+            this.toastService.error('复制失败，请重试');
         });
     }
 

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { LoggerService } from '../core/logger.service';
 import { ApiMessage } from '../../types/ai.types';
+import { SummaryService } from './summary.service';
 
 /**
  * 记忆层类型
@@ -75,7 +76,10 @@ export class Memory {
     // 重要性阈值
     private readonly IMPORTANCE_THRESHOLD = 0.7;
 
-    constructor(private logger: LoggerService) {
+    constructor(
+        private logger: LoggerService,
+        private summaryService: SummaryService
+    ) {
         this.logger.info('Memory system initialized');
         this.loadFromStorage();
     }
@@ -253,8 +257,16 @@ export class Memory {
             return '无相关记忆';
         }
 
-        // TODO: 使用AI生成摘要
-        const summary = this.generateIntelligentSummary(sessionMemories);
+        // 将记忆转换为ApiMessage格式供AI摘要生成
+        const messages: ApiMessage[] = sessionMemories.map(m => ({
+            role: m.content.includes('assistant:') ? 'assistant' as const : 'user' as const,
+            content: m.content,
+            ts: m.metadata.timestamp
+        }));
+
+        // 使用AI生成摘要
+        const summaryResult = await this.summaryService.generateSummary(messages);
+        const summary = summaryResult.summary;
 
         // 保存为中期记忆
         const midTermId = this.store(summary, MemoryLayer.MID_TERM, {
@@ -266,6 +278,8 @@ export class Memory {
         this.logger.info('Created mid-term summary', {
             sessionId,
             summaryLength: summary.length,
+            originalMessageCount: summaryResult.originalMessageCount,
+            tokensCost: summaryResult.tokensCost,
             memoryId: midTermId
         });
 
@@ -440,36 +454,6 @@ export class Memory {
 
         const toDelete = sorted.slice(0, memories.size - maxItems);
         toDelete.forEach(([id]) => memories.delete(id));
-    }
-
-    private generateIntelligentSummary(memories: MemoryItem[]): string {
-        // 简化版摘要生成
-        // 实际实现中应该使用AI
-
-        const userMessages = memories.filter(m => m.content.includes('user:'));
-        const assistantMessages = memories.filter(m => m.content.includes('assistant:'));
-
-        let summary = `会话摘要（共${memories.length}条记忆）：\n\n`;
-
-        if (userMessages.length > 0) {
-            summary += `用户主要问题：\n`;
-            summary += `${userMessages[0].content.substring(0, 100)}...\n\n`;
-        }
-
-        if (assistantMessages.length > 0) {
-            summary += `助手主要回复：\n`;
-            summary += `${assistantMessages[0].content.substring(0, 100)}...\n\n`;
-        }
-
-        summary += `关键要点：\n`;
-        memories
-            .filter(m => m.metadata.importance > this.IMPORTANCE_THRESHOLD)
-            .slice(0, 3)
-            .forEach((m, i) => {
-                summary += `${i + 1}. ${m.content.substring(0, 80)}...\n`;
-            });
-
-        return summary;
     }
 
     private calculateSimilarity(text1: string, text2: string): number {
