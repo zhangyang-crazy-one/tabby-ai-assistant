@@ -220,6 +220,21 @@ export class AiSidebarComponent implements OnInit, OnDestroy, AfterViewChecked, 
             this.sendWelcomeMessage();
         }
 
+        // 订阅预设消息（快捷键功能）
+        this.sidebarService.presetMessage$.pipe(
+            takeUntil(this.destroy$)
+        ).subscribe(({ message, autoSend }) => {
+            this.inputValue = message;
+
+            if (autoSend) {
+                // 延迟一点确保 UI 更新
+                setTimeout(() => this.submit(), 100);
+            } else {
+                // 聚焦输入框
+                this.textInput?.nativeElement?.focus();
+            }
+        });
+
         // 延迟检查滚动状态（等待 DOM 渲染）
         setTimeout(() => this.checkScrollState(), 100);
     }

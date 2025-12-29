@@ -8,7 +8,7 @@ import { debounceTime } from 'rxjs/operators';
 import { ConfigService } from 'tabby-core';
 import { ConfigProviderService } from './config-provider.service';
 
-export type ThemeType = 'auto' | 'light' | 'dark' | 'pixel' | 'tech';
+export type ThemeType = 'auto' | 'light' | 'dark' | 'pixel' | 'tech' | 'parchment';
 
 // 主题变量定义
 const THEME_VARIABLES: Record<Exclude<ThemeType, 'auto'>, Record<string, string>> = {
@@ -48,38 +48,38 @@ const THEME_VARIABLES: Record<Exclude<ThemeType, 'auto'>, Record<string, string>
         'ai-transition-duration': '0.3s'
     },
     dark: {
-        // 主色调
-        'ai-primary': '#4dabf7',
-        'ai-primary-hover': '#339af0',
-        'ai-secondary': '#adb5bd',
-        'ai-success': '#51cf66',
-        'ai-warning': '#fcc419',
-        'ai-danger': '#ff6b6b',
-        'ai-info': '#22b8cf',
+        // 主色调 - 更深沉的深色主题
+        'ai-primary': '#60a5fa',
+        'ai-primary-hover': '#93c5fd',
+        'ai-secondary': '#9ca3af',
+        'ai-success': '#34d399',
+        'ai-warning': '#fbbf24',
+        'ai-danger': '#f87171',
+        'ai-info': '#22d3ee',
         // 风险级别颜色
-        'ai-risk-low': '#51cf66',
-        'ai-risk-medium': '#fcc419',
-        'ai-risk-high': '#ff922b',
-        'ai-risk-critical': '#ff6b6b',
+        'ai-risk-low': '#34d399',
+        'ai-risk-medium': '#fbbf24',
+        'ai-risk-high': '#fb923c',
+        'ai-risk-critical': '#f87171',
         // 聊天消息颜色
         'ai-user-message': '#1e3a5f',
-        'ai-assistant-message': '#2d3748',
-        'ai-system-message': '#3a3a3a',
-        // 背景和边框
-        'ai-bg-primary': '#1a1a1a',
-        'ai-bg-secondary': '#2d2d2d',
-        'ai-bg-tertiary': '#3d3d3d',
-        'ai-text-primary': '#f8f9fa',
-        'ai-text-secondary': '#adb5bd',
-        'ai-border': '#4a4a4a',
+        'ai-assistant-message': '#1f2937',
+        'ai-system-message': '#374151',
+        // 背景和边框 - 更深的配色
+        'ai-bg-primary': '#0d0d14',
+        'ai-bg-secondary': '#12121a',
+        'ai-bg-tertiary': '#1e1e2e',
+        'ai-text-primary': '#f1f5f9',
+        'ai-text-secondary': '#94a3b8',
+        'ai-border': '#2d2d3d',
         'ai-border-radius': '0.375rem',
-        'ai-box-shadow': '0 0.125rem 0.25rem rgba(0, 0, 0, 0.3)',
+        'ai-box-shadow': '0 0.125rem 0.25rem rgba(0, 0, 0, 0.4)',
         // 字体
         'ai-font-family': "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         'ai-font-size-base': '14px',
         // 其他
-        'ai-dark': '#212529',
-        'ai-light': '#f8f9fa',
+        'ai-dark': '#0d0d14',
+        'ai-light': '#f1f5f9',
         'ai-transition-duration': '0.3s'
     },
     pixel: {
@@ -151,6 +151,48 @@ const THEME_VARIABLES: Record<Exclude<ThemeType, 'auto'>, Record<string, string>
         'ai-dark': '#0a0a0f',
         'ai-light': '#12121a',
         'ai-transition-duration': '0.3s'
+    },
+    parchment: {
+        // 做旧羊皮卷 (Parchment) 主题
+        // 主色调 - 棕红色强调
+        'ai-primary': '#8b4513',
+        'ai-primary-hover': '#a0522d',
+        'ai-secondary': '#6b5344',
+        'ai-success': '#5d8a4d',
+        'ai-warning': '#c9a227',
+        'ai-danger': '#b84c4c',
+        'ai-info': '#6b8e9f',
+        // 风险级别颜色
+        'ai-risk-low': '#5d8a4d',
+        'ai-risk-medium': '#c9a227',
+        'ai-risk-high': '#d4763a',
+        'ai-risk-critical': '#b84c4c',
+        // 聊天消息颜色 - 做旧质感
+        'ai-user-message': '#e8d4a8',
+        'ai-assistant-message': '#fff8e7',
+        'ai-system-message': '#dcc78e',
+        // 背景和边框 - 羊皮纸质感
+        'ai-bg-primary': '#f5e6c8',
+        'ai-bg-secondary': '#e8d4a8',
+        'ai-bg-tertiary': '#dcc78e',
+        'ai-text-primary': '#3d2e1c',
+        'ai-text-secondary': '#5c4a32',
+        'ai-text-muted': '#8a7355',
+        'ai-border': '#c9b896',
+        'ai-border-radius': '2px',
+        'ai-box-shadow': '0 2px 8px rgba(61, 46, 28, 0.15)',
+        // 字体
+        'ai-font-family': "'Georgia', 'Times New Roman', serif",
+        'ai-font-size-base': '14px',
+        // 其他
+        'ai-dark': '#3d2e1c',
+        'ai-light': '#f5e6c8',
+        'ai-transition-duration': '0.3s',
+        // 羊皮卷特有 - 代码块背景
+        'ai-code-bg': '#f0e0c0',
+        // 滚动条
+        'ai-scrollbar': '#c9b896',
+        'ai-scrollbar-thumb': '#a08060'
     }
 };
 
@@ -165,7 +207,7 @@ export class ThemeService implements OnDestroy {
 
     private readonly allThemeClasses = [
         'ai-theme-auto', 'ai-theme-light', 'ai-theme-dark',
-        'ai-theme-pixel', 'ai-theme-tech'
+        'ai-theme-pixel', 'ai-theme-tech', 'ai-theme-parchment'
     ];
 
     // AI 助手容器选择器
@@ -390,6 +432,155 @@ ${this.containerSelectors.join(',\n')} {
         background: var(--ai-primary) !important;
         border-radius: 0 !important;
         box-shadow: 0 0 10px var(--ai-primary) !important;
+    }
+}
+            `.trim();
+        }
+
+        if (theme === 'parchment') {
+            return `
+/* Parchment theme specific styles - 做旧羊皮卷风格 */
+${this.containerSelectors.join(',\n')} {
+    /* 纸张纹理背景效果 */
+    background: var(--ai-bg-primary) !important;
+
+    /* 复古边框效果 */
+    .btn {
+        background: linear-gradient(180deg, var(--ai-bg-secondary) 0%, var(--ai-bg-tertiary) 100%) !important;
+        border: 2px solid var(--ai-border) !important;
+        color: var(--ai-text-primary) !important;
+        border-radius: var(--ai-border-radius) !important;
+        font-family: var(--ai-font-family) !important;
+        box-shadow:
+            0 2px 4px rgba(61, 46, 28, 0.1),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+    }
+
+    .btn:hover {
+        background: linear-gradient(180deg, var(--ai-bg-tertiary) 0%, var(--ai-bg-secondary) 100%) !important;
+        border-color: var(--ai-primary) !important;
+        box-shadow:
+            0 4px 8px rgba(61, 46, 28, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+    }
+
+    /* 做旧输入框 */
+    input,
+    textarea,
+    .form-control {
+        border: 2px solid var(--ai-border) !important;
+        border-radius: var(--ai-border-radius) !important;
+        background: var(--ai-bg-primary) !important;
+        color: var(--ai-text-primary) !important;
+        font-family: var(--ai-font-family) !important;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+    }
+
+    input:focus,
+    textarea:focus,
+    .form-control:focus {
+        outline: none !important;
+        border-color: var(--ai-primary) !important;
+        box-shadow:
+            0 0 0 3px rgba(139, 69, 19, 0.1),
+            inset 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+    }
+
+    /* 聊天气泡做旧效果 */
+    .message-bubble,
+    .message-content {
+        border-radius: var(--ai-border-radius) !important;
+        font-family: var(--ai-font-family) !important;
+    }
+
+    .message-item.user .message-bubble {
+        background: var(--ai-user-message) !important;
+        border: 1px solid var(--ai-border) !important;
+    }
+
+    .message-item.assistant .message-bubble {
+        background: var(--ai-assistant-message) !important;
+        border: 1px solid var(--ai-border) !important;
+    }
+
+    /* 标题使用衬线字体 */
+    h2, h3, h4, h5, h6 {
+        font-family: var(--ai-font-family) !important;
+        color: var(--ai-text-primary) !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.02em !important;
+    }
+
+    /* 分割线做旧效果 */
+    hr {
+        border-color: var(--ai-border) !important;
+        opacity: 0.6 !important;
+    }
+
+    /* 代码块背景 */
+    pre, code {
+        background: var(--ai-code-bg) !important;
+        font-family: 'Consolas', 'Monaco', monospace !important;
+        border-radius: var(--ai-border-radius) !important;
+    }
+
+    /* 滚动条做旧 */
+    ::-webkit-scrollbar {
+        width: 10px !important;
+        background: var(--ai-scrollbar) !important;
+        border-radius: 5px !important;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: var(--ai-scrollbar-thumb) !important;
+        border-radius: 5px !important;
+        border: 2px solid var(--ai-scrollbar) !important;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--ai-primary) !important;
+    }
+
+    /* 下拉菜单做旧效果 */
+    .dropdown-menu {
+        background: var(--ai-bg-primary) !important;
+        border: 2px solid var(--ai-border) !important;
+        border-radius: var(--ai-border-radius) !important;
+        box-shadow: 0 4px 12px rgba(61, 46, 28, 0.15) !important;
+    }
+
+    .dropdown-item {
+        color: var(--ai-text-primary) !important;
+        font-family: var(--ai-font-family) !important;
+    }
+
+    .dropdown-item:hover {
+        background: var(--ai-bg-secondary) !important;
+    }
+
+    /* 标签页样式 */
+    .nav-tabs .nav-link {
+        color: var(--ai-text-secondary) !important;
+        font-family: var(--ai-font-family) !important;
+        border: none !important;
+        border-bottom: 2px solid transparent !important;
+    }
+
+    .nav-tabs .nav-link:hover {
+        color: var(--ai-text-primary) !important;
+        border-bottom-color: var(--ai-border) !important;
+    }
+
+    .nav-tabs .nav-link.active {
+        color: var(--ai-primary) !important;
+        border-bottom-color: var(--ai-primary) !important;
+        background: transparent !important;
+    }
+
+    /* 警告框做旧 */
+    .alert {
+        border-radius: var(--ai-border-radius) !important;
+        font-family: var(--ai-font-family) !important;
     }
 }
             `.trim();

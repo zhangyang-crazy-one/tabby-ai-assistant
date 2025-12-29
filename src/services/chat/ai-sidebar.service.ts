@@ -1,6 +1,15 @@
 import { Injectable, ComponentFactoryResolver, ApplicationRef, Injector, EmbeddedViewRef, ComponentRef, EnvironmentInjector, createComponent } from '@angular/core';
+import { Subject, Observable } from 'rxjs';
 import { ConfigService } from 'tabby-core';
 import { AiSidebarComponent } from '../../components/chat/ai-sidebar.component';
+
+/**
+ * 预设消息接口
+ */
+export interface PresetMessage {
+    message: string;
+    autoSend: boolean;
+}
 
 /**
  * AI Sidebar 配置接口
@@ -34,6 +43,16 @@ export class AiSidebarService {
     private readonly DEFAULT_WIDTH = 320;
     private currentWidth: number = this.DEFAULT_WIDTH;
     private isResizing = false;
+
+    // 预设消息 Subject（用于快捷键功能）
+    private presetMessageSubject = new Subject<PresetMessage>();
+
+    /**
+     * 获取预设消息 Observable
+     */
+    get presetMessage$(): Observable<PresetMessage> {
+        return this.presetMessageSubject.asObservable();
+    }
 
     /**
      * 侧边栏是否可见
@@ -100,6 +119,21 @@ export class AiSidebarService {
      */
     get visible(): boolean {
         return this._isVisible;
+    }
+
+    /**
+     * 发送预设消息并执行
+     * 用于快捷键功能 - 自动填充并发送消息
+     * @param message 消息内容
+     * @param autoSend 是否自动发送（否则只填充不发送）
+     */
+    sendPresetMessage(message: string, autoSend: boolean = true): void {
+        if (!this._isVisible) {
+            this.show();
+        }
+
+        // 通知侧边栏组件填充消息
+        this.presetMessageSubject.next({ message, autoSend });
     }
 
     /**

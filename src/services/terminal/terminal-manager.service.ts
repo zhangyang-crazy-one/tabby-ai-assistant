@@ -255,6 +255,130 @@ export class TerminalManagerService {
     }
 
     /**
+     * 获取当前终端选中的文本（别名）
+     * 用于快捷键功能
+     */
+    getSelectedText(): string | null {
+        const selection = this.getSelection();
+        return selection || null;
+    }
+
+    /**
+     * 获取当前终端最后一条命令
+     * 用于快捷键功能 - 命令解释
+     * 注意：如果当前没有活动终端，会尝试获取任意可用终端
+     */
+    getLastCommand(): string | null {
+        // 首先尝试当前活动终端
+        let output = this.readTerminalOutput(10);
+
+        // 如果当前活动终端没有输出，尝试获取第一个可用终端
+        if (!output || output.trim() === '') {
+            const terminals = this.getAllTerminals();
+            for (const terminal of terminals) {
+                try {
+                    const terminalOutput = this.readTerminalOutputFromTerminal(terminal, 10);
+                    if (terminalOutput && terminalOutput.trim() !== '') {
+                        output = terminalOutput;
+                        break;
+                    }
+                } catch {
+                    continue;
+                }
+            }
+        }
+
+        if (!output) return null;
+
+        // 尝试提取最后一条命令（通常是 $ 或 > 后面的内容）
+        const lines = output.split('\n').filter(l => l.trim());
+
+        for (let i = lines.length - 1; i >= 0; i--) {
+            const line = lines[i];
+            // 匹配常见的命令提示符
+            const match = line.match(/(?:[$>%#]|PS [^>]+>)\s*(.+)/);
+            if (match && match[1]) {
+                const cmd = match[1].trim();
+                // 排除明显的非命令行
+                if (cmd && !cmd.startsWith('[') && cmd.length > 0) {
+                    return cmd;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 获取当前终端最近的输出（用于解释）
+     * 用于快捷键功能 - 获取终端上下文
+     * 注意：如果当前没有活动终端，会尝试获取任意可用终端
+     */
+    getRecentContext(): string {
+        // 首先尝试当前活动终端
+        let output = this.readTerminalOutput(20);
+
+        // 如果当前活动终端没有输出，尝试获取第一个可用终端
+        if (!output || output.trim() === '') {
+            const terminals = this.getAllTerminals();
+            for (const terminal of terminals) {
+                try {
+                    const terminalOutput = this.readTerminalOutputFromTerminal(terminal, 20);
+                    if (terminalOutput && terminalOutput.trim() !== '') {
+                        output = terminalOutput;
+                        break;
+                    }
+                } catch {
+                    continue;
+                }
+            }
+        }
+
+        return output || '';
+    }
+
+    /**
+     * 从指定终端读取输出
+     */
+    private readTerminalOutputFromTerminal(terminal: TerminalTab, lines: number = 50): string {
+        if (!terminal || !terminal.frontend) {
+            return '';
+        }
+
+        try {
+            const frontend = terminal.frontend as any;
+
+            // 方法 1: 使用 xterm buffer
+            if (frontend.xterm?.buffer?.active) {
+                const buffer = frontend.xterm.buffer.active;
+                const totalLines = buffer.length;
+                const startLine = Math.max(0, totalLines - lines);
+                const outputLines: string[] = [];
+
+                for (let i = startLine; i < totalLines; i++) {
+                    const line = buffer.getLine(i);
+                    if (line) {
+                        const text = line.translateToString(true);
+                        if (text.trim()) {
+                            outputLines.push(text);
+                        }
+                    }
+                }
+
+                return outputLines.join('\n');
+            }
+
+            // 方法 2: 使用 frontend.saveContentsToFile 模拟
+            if (typeof frontend.getContentsAsString === 'function') {
+                return frontend.getContentsAsString(lines);
+            }
+        } catch (error) {
+            this.logger.debug('Failed to read terminal output', error);
+        }
+
+        return '';
+    }
+
+    /**
      * 获取终端工作目录
      */
     getTerminalCwd(terminal?: TerminalTab): string | undefined {
@@ -703,6 +827,60 @@ export class TerminalManagerService {
         }
 
         this.logger.info('Stopped continuous monitoring', { terminalId: terminalId || 'all' });
+    }
+
+    /**
+     * 读取终端输出（快捷键功能需要）
+     */
+    readTerminalOutput(lines: number = 50, terminalIndex?: number): string {
+        try {
+            const terminals = this.getAllTerminals();
+            const terminal = terminalIndex !== undefined
+                ? terminals[terminalIndex]
+                : this.getActiveTerminal();
+
+            if (!terminal) {
+                return '';
+            }
+
+            // 获取 xterm.js 的 buffer
+            const frontend = terminal.frontend as any;
+            if (!frontend?._core) {
+                return '';
+            }
+
+            const core = frontend._core;
+            const buffer = core.buffer || (core.terminal && core.terminal.buffer);
+
+            if (!buffer) {
+                return '';
+            }
+
+            // 获取行数
+            const lineCount = buffer.active?.length || buffer.length || 0;
+            const startLine = Math.max(0, lineCount - lines);
+
+            // 收集输出行
+            const outputLines: string[] = [];
+            for (let i = startLine; i < lineCount; i++) {
+                try {
+                    const line = buffer.active?.getLine(i) || buffer.getLine(i);
+                    if (line) {
+                        const lineText = line.translateToString();
+                        if (lineText) {
+                            outputLines.push(lineText);
+                        }
+                    }
+                } catch {
+                    // 忽略单行读取错误
+                }
+            }
+
+            return outputLines.join('\n');
+        } catch (error) {
+            this.logger.error('Failed to read terminal output', error);
+            return '';
+        }
     }
 
     // ==================== 私有辅助方法 ====================

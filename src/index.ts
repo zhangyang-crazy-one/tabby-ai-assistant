@@ -204,6 +204,7 @@ export default class AiAssistantModule {
         private config: ConfigService,
         private aiService: AiAssistantService,
         private sidebarService: AiSidebarService,
+        private terminalManager: TerminalManagerService,
         hotkeys: HotkeysService
     ) {
         console.log('[AiAssistantModule] Module initialized');
@@ -224,20 +225,87 @@ export default class AiAssistantModule {
 
         // 订阅热键事件
         hotkeys.hotkey$.subscribe(hotkey => {
-            if (hotkey === 'ai-assistant-toggle') {
-                this.sidebarService.toggle();
-            } else if (hotkey === 'ai-command-generation') {
-                // 打开侧边栏并聚焦输入
-                if (!this.sidebarService.sidebarVisible) {
-                    this.sidebarService.show();
-                }
-            } else if (hotkey === 'ai-explain-command') {
-                // 打开侧边栏
-                if (!this.sidebarService.sidebarVisible) {
-                    this.sidebarService.show();
-                }
-            }
+            this.handleHotkey(hotkey);
         });
+    }
+
+    /**
+     * 处理热键事件
+     */
+    private handleHotkey(hotkey: string): void {
+        switch (hotkey) {
+            case 'ai-assistant-toggle':
+                this.sidebarService.toggle();
+                break;
+
+            case 'ai-command-generation':
+                this.handleCommandGeneration();
+                break;
+
+            case 'ai-explain-command':
+                this.handleExplainCommand();
+                break;
+        }
+    }
+
+    /**
+     * 处理命令生成快捷键 (Ctrl+Shift+G)
+     * 1. 尝试获取选中文本
+     * 2. 尝试获取最后一条命令
+     * 3. 获取终端上下文
+     * 4. 构建提示并发送
+     */
+    private handleCommandGeneration(): void {
+        // 1. 尝试获取选中文本
+        const selectedText = this.terminalManager.getSelectedText();
+
+        // 2. 尝试获取最后一条命令
+        const lastCommand = this.terminalManager.getLastCommand();
+
+        // 3. 获取终端上下文
+        const context = this.terminalManager.getRecentContext();
+
+        // 4. 构建提示
+        let prompt: string;
+        if (selectedText) {
+            prompt = `请帮我优化或改进这个命令：\n\`\`\`\n${selectedText}\n\`\`\``;
+        } else if (lastCommand) {
+            prompt = `基于当前终端状态，请帮我生成下一步需要的命令。\n\n最近执行的命令: ${lastCommand}\n\n终端上下文:\n\`\`\`\n${context}\n\`\`\``;
+        } else {
+            prompt = `请根据当前终端状态帮我生成需要的命令。\n\n终端上下文:\n\`\`\`\n${context}\n\`\`\``;
+        }
+
+        // 5. 发送消息（自动发送）
+        this.sidebarService.sendPresetMessage(prompt, true);
+    }
+
+    /**
+     * 处理命令解释快捷键 (Ctrl+Shift+E)
+     * 1. 尝试获取选中文本
+     * 2. 尝试获取最后一条命令
+     * 3. 构建提示并发送
+     */
+    private handleExplainCommand(): void {
+        // 1. 尝试获取选中文本
+        const selectedText = this.terminalManager.getSelectedText();
+
+        // 2. 尝试获取最后一条命令
+        const lastCommand = this.terminalManager.getLastCommand();
+
+        // 3. 构建提示
+        let prompt: string;
+        if (selectedText) {
+            prompt = `请详细解释这个命令的作用和每个参数的含义：\n\`\`\`\n${selectedText}\n\`\`\``;
+        } else if (lastCommand) {
+            prompt = `请详细解释这个命令的作用和每个参数的含义：\n\`\`\`\n${lastCommand}\n\`\`\``;
+        } else {
+            // 读取更多上下文让用户选择
+            const context = this.terminalManager.getRecentContext();
+            prompt = `请解释最近的终端输出内容：\n\`\`\`\n${context}\n\`\`\``;
+        }
+
+        // 4. 发送消息（自动发送）
+        this.sidebarService.sendPresetMessage(prompt, true);
     }
 }
 

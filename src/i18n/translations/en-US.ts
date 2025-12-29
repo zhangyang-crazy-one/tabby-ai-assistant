@@ -50,6 +50,7 @@ export const enUS: TranslationKeys = {
         themeDark: 'Dark Theme',
         themePixel: 'Pixel Retro',
         themeTech: 'Cyber Tech',
+        themeParchment: 'Parchment',
         shortcuts: 'Shortcuts',
         shortcutOpenChat: 'Open AI Assistant',
         shortcutOpenChatDesc: 'Open the chat interface',

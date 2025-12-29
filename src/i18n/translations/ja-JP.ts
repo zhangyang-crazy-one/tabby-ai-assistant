@@ -50,6 +50,7 @@ export const jaJP: TranslationKeys = {
         themeDark: 'ダークテーマ',
         themePixel: 'ピクセルレトロ',
         themeTech: 'サイバーテック',
+        themeParchment: '羊皮紙',
         shortcuts: 'ショートカットキー',
         shortcutOpenChat: 'AIアシスタントを開く',
         shortcutOpenChatDesc: 'チャット界面を開く',

@@ -51,6 +51,7 @@ export interface GeneralTranslations {
     themeDark: string;
     themePixel: string;
     themeTech: string;
+    themeParchment: string;
     shortcuts: string;
     shortcutOpenChat: string;
     shortcutOpenChatDesc: string;

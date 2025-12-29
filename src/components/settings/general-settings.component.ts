@@ -41,7 +41,8 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
         { value: 'light', label: '浅色主题' },
         { value: 'dark', label: '深色主题' },
         { value: 'pixel', label: '像素复古' },
-        { value: 'tech', label: '赛博科技' }
+        { value: 'tech', label: '赛博科技' },
+        { value: 'parchment', label: '羊皮卷' }
     ];
 
     // 提供商模板，用于显示名称
@@ -96,7 +97,8 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
             { value: 'light', label: this.t.general.themeLight },
             { value: 'dark', label: this.t.general.themeDark },
             { value: 'pixel', label: this.t.general.themePixel || '像素复古' },
-            { value: 'tech', label: this.t.general.themeTech || '赛博科技' }
+            { value: 'tech', label: this.t.general.themeTech || '赛博科技' },
+            { value: 'parchment', label: this.t.general.themeParchment || '羊皮卷' }
         ];
     }
 

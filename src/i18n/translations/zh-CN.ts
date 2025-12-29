@@ -50,6 +50,7 @@ export const zhCN: TranslationKeys = {
         themeDark: '深色主题',
         themePixel: '像素复古',
         themeTech: '赛博科技',
+        themeParchment: '羊皮卷',
         shortcuts: '快捷键',
         shortcutOpenChat: '打开AI助手',
         shortcutOpenChatDesc: '打开聊天界面',
