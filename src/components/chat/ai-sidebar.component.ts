@@ -181,6 +181,10 @@ export class AiSidebarComponent implements OnInit, OnDestroy, AfterViewChecked, 
     isComposing = false;
     charLimit = 4000;
 
+    // Agent 模式配置
+    /** Agent 模式最多保留的历史消息数量（不包含系统消息） */
+    private readonly MAX_AGENT_HISTORY = 10;
+
     // Token 使用状态
     currentTokens: number = 0;
     maxTokens: number = 200000;
@@ -340,6 +344,100 @@ export class AiSidebarComponent implements OnInit, OnDestroy, AfterViewChecked, 
     }
 
     /**
+     * 构建用于 Agent 模式的消息列表
+     * 使用 ContextManager 获取有效历史，自动过滤被压缩的消息
+     */
+    private buildAgentMessages(userMessage: ChatMessage): ChatMessage[] {
+        // 1. 获取系统消息
+        const systemMessages = this.messages.filter(m => m.role === MessageRole.SYSTEM);
+
+        // 2. 使用 ContextManager 获取有效历史（自动过滤被压缩的消息）
+        const effectiveHistory = this.contextManager.getEffectiveHistory(this.currentSessionId);
+
+        // 3. 转换并限制数量
+        const historyMessages = effectiveHistory
+            .filter(m => m.role !== 'system')
+            .slice(-this.MAX_AGENT_HISTORY)
+            .map(m => this.convertToAgentMessage(m));
+
+        // 4. 清洗历史消息中的工具卡片 HTML 和 XML 格式工具调用
+        const cleanedHistory = historyMessages.map(m => {
+            if (m.role === MessageRole.ASSISTANT &&
+                (m.content.includes('tool-call-card') || m.content.includes('<invoke') || m.content.includes('<parameter'))) {
+                return {
+                    ...m,
+                    content: this.cleanToolCardHtml(m.content)
+                };
+            }
+            return m;
+        });
+
+        return [...systemMessages, ...cleanedHistory, userMessage];
+    }
+
+    /**
+     * 将 ApiMessage 转换为 ChatMessage
+     */
+    private convertToAgentMessage(apiMessage: any): ChatMessage {
+        let content = apiMessage.content;
+
+        // 如果是摘要消息，添加标记
+        if (apiMessage.isSummary) {
+            content = `[历史摘要] ${content}`;
+        }
+
+        // 如果是截断标记，保留原样
+        if (apiMessage.isTruncationMarker) {
+            content = apiMessage.content;
+        }
+
+        return {
+            id: apiMessage.id || this.generateId(),
+            role: apiMessage.role as MessageRole,
+            content,
+            timestamp: new Date(apiMessage.ts || Date.now())
+        };
+    }
+
+    /**
+     * 清洗工具卡片 HTML，保留可读的执行结果
+     * 同时移除 AI 可能输出的 XML 格式工具调用（防止模仿）
+     */
+    private cleanToolCardHtml(content: string): string {
+        // 移除工具卡片 div，保留输出内容
+        let cleaned = content
+            // === 新增：移除 XML 格式的工具调用（防止 AI 模仿）===
+            .replace(/<invoke\s+name="[^"]*"[^>]*>[\s\S]*?<\/invoke>/gi, '[工具已调用]')
+            .replace(/<invoke\s+name="[^"]*"[^>]*>[\s\S]*/gi, '[工具已调用]')  // 未闭合的标签
+            .replace(/<parameter\s+name="[^"]*">[^<]*<\/parameter>/gi, '')
+            .replace(/<parameter\s+name="[^"]*">[^<]*/gi, '')  // 未闭合的参数
+            // 移除工具卡片容器
+            .replace(/<div class="tool-call-card[^"]*">/g, '')
+            .replace(/<\/div>/g, '')
+            // 移除工具头部
+            .replace(/<div class="tool-header">[\s\S]*?<\/div>/g, '')
+            // 移除工具状态
+            .replace(/<span class="tool-status[^"]*">[^<]*<\/span>/g, '')
+            // 移除工具图标和名称
+            .replace(/<span class="tool-icon">[^<]*<\/span>/g, '')
+            .replace(/<span class="tool-name">[^<]*<\/span>/g, '')
+            // 移除持续时间
+            .replace(/<span class="tool-duration">[^<]*<\/span>/g, '')
+            // 保留输出内容
+            .replace(/<div class="tool-output">/g, '\n[工具输出]:\n')
+            .replace(/<div class="tool-output-header">[^<]*<\/div>/g, '')
+            .replace(/<pre>/g, '')
+            .replace(/<\/pre>/g, '')
+            // 移除错误消息样式
+            .replace(/<div class="tool-output tool-error-message">/g, '\n[错误]:\n')
+            // 清理多余空行
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+
+        return cleaned;
+    }
+
+    /**
      * 处理发送消息 - 使用 Agent 循环模式
      * 支持多轮工具调用自动循环
      */
@@ -376,13 +474,16 @@ export class AiSidebarComponent implements OnInit, OnDestroy, AfterViewChecked, 
         const toolStatus = new Map<string, { name: string; startTime: number }>();
 
         try {
+            // 构建用于 Agent 的消息列表（限制历史消息数量）
+            const messagesForAgent = this.buildAgentMessages(userMessage);
+
             // 使用 Agent 循环流式 API
             this.aiService.chatStreamWithAgentLoop({
-                messages: this.messages.slice(0, -1),
+                messages: messagesForAgent,
                 maxTokens: 2000,
                 temperature: 0.7
             }, {
-                maxRounds: 5
+                maxRounds: this.config.get('agentMaxRounds', 50) ?? 50  // 从配置读取最大轮数
             }).pipe(
                 takeUntil(this.destroy$)
             ).subscribe({

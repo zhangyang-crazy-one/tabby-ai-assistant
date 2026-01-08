@@ -101,6 +101,22 @@
                 </label>
             </div>
         </div>
+
+        <div class="form-group agent-max-rounds">
+            <label>{{ t.chatSettings.agentMaxRounds }}</label>
+            <div class="input-with-unit">
+                <input
+                    type="number"
+                    class="form-control"
+                    [(ngModel)]="settings.agentMaxRounds"
+                    (change)="saveSetting('agentMaxRounds', settings.agentMaxRounds)"
+                    min="10"
+                    max="200"
+                    step="10">
+                <span class="unit">{{ t.chatSettings.agentMaxRoundsUnit }}</span>
+            </div>
+            <small class="form-text">{{ t.chatSettings.agentMaxRoundsDesc }}</small>
+        </div>
     </div>
 
     <!-- 聊天历史 -->

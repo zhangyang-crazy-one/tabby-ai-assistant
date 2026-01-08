@@ -34,6 +34,8 @@ export interface SettingsTranslations {
     contextTab: string;
     securityTab: string;
     chatTab: string;
+    mcpTab: string;
+    dataTab: string;
     advancedTab: string;
 }
 
@@ -79,6 +81,9 @@ export interface ChatSettingsTranslations {
     showAvatarsDesc: string;
     soundEnabled: string;
     soundEnabledDesc: string;
+    agentMaxRounds: string;
+    agentMaxRoundsUnit: string;
+    agentMaxRoundsDesc: string;
     history: string;
     enableHistory: string;
     enableHistoryDesc: string;
@@ -227,6 +232,70 @@ export interface ContextSettingsTranslations {
     configSaved: string;
 }
 
+// MCP 设置
+export interface MCPSettingsTranslations {
+    title: string;
+    description: string;
+    noServers: string;
+    addServerHint: string;
+    addServer: string;
+    editServer: string;
+    serverName: string;
+    serverNamePlaceholder: string;
+    transportType: string;
+    transportStdio: string;
+    transportSSE: string;
+    transportHTTP: string;
+    command: string;
+    commandPlaceholder: string;
+    args: string;
+    argsPlaceholder: string;
+    argsHint: string;
+    workingDir: string;
+    workingDirPlaceholder: string;
+    envVars: string;
+    envVarsPlaceholder: string;
+    serverURL: string;
+    urlPlaceholder: string;
+    headers: string;
+    headersPlaceholder: string;
+    autoConnect: string;
+    toolsAvailable: string;
+    deleteConfirm: string;
+    validationError: string;
+    moreServers: string;
+    connect: string;
+    disconnect: string;
+    connecting: string;
+    retry: string;
+}
+
+// 数据管理设置
+export interface DataSettingsTranslations {
+    title: string;
+    description: string;
+    storageLocation: string;
+    openDirectory: string;
+    storedFiles: string;
+    fileName: string;
+    size: string;
+    lastModified: string;
+    actions: string;
+    view: string;
+    delete: string;
+    noFiles: string;
+    statistics: string;
+    chatSessions: string;
+    memoryItems: string;
+    checkpoints: string;
+    consents: string;
+    exportAll: string;
+    importData: string;
+    migrateData: string;
+    clearAll: string;
+    migrationNote: string;
+}
+
 // 主翻译类型
 export interface TranslationKeys {
     common: CommonTranslations;
@@ -240,6 +309,8 @@ export interface TranslationKeys {
     riskLevel: RiskLevelTranslations;
     advancedSettings: AdvancedSettingsTranslations;
     contextSettings: ContextSettingsTranslations;
+    mcpSettings: MCPSettingsTranslations;
+    dataSettings: DataSettingsTranslations;
 }
 
 // 支持的语言类型
