@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Subject, Observable } from 'rxjs';
 import { LoggerService } from './logger.service';
+import { FileStorageService } from './file-storage.service';
 import { SecurityConfig } from '../../types/security.types';
 import { ProviderConfig, PROVIDER_DEFAULTS, ProviderConfigUtils } from '../../types/provider.types';
 import { ContextConfig } from '../../types/ai.types';
@@ -29,6 +30,8 @@ export interface AiAssistantConfig {
         compactMode: boolean;
         fontSize: number;
     };
+    /** Agent 最大执行轮数 */
+    agentMaxRounds: number;
 }
 
 const DEFAULT_CONFIG: AiAssistantConfig = {
@@ -69,7 +72,8 @@ const DEFAULT_CONFIG: AiAssistantConfig = {
         showTooltips: true,
         compactMode: false,
         fontSize: 14
-    }
+    },
+    agentMaxRounds: 50
 };
 
 @Injectable({ providedIn: 'root' })
@@ -77,7 +81,13 @@ export class ConfigProviderService {
     private config: AiAssistantConfig = { ...DEFAULT_CONFIG };
     private configChange$ = new Subject<{ key: string; value: any }>();
 
-    constructor(private logger: LoggerService) {
+    /** 文件存储键名 */
+    private readonly STORAGE_FILENAME = 'config';
+
+    constructor(
+        private logger: LoggerService,
+        private fileStorage: FileStorageService
+    ) {
         this.loadConfig();
     }
 
@@ -86,11 +96,14 @@ export class ConfigProviderService {
      */
     private loadConfig(): void {
         try {
-            const stored = localStorage.getItem('ai-assistant-config');
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                this.config = { ...DEFAULT_CONFIG, ...parsed };
-                this.logger.info('Configuration loaded from storage');
+            const data = this.fileStorage.load<Partial<AiAssistantConfig>>(
+                this.STORAGE_FILENAME,
+                {}
+            );
+
+            if (Object.keys(data).length > 0) {
+                this.config = { ...DEFAULT_CONFIG, ...data };
+                this.logger.info('Configuration loaded from file storage');
             } else {
                 this.logger.info('No stored configuration found, using defaults');
             }
@@ -104,12 +117,8 @@ export class ConfigProviderService {
      * 保存配置
      */
     private saveConfig(): void {
-        try {
-            localStorage.setItem('ai-assistant-config', JSON.stringify(this.config));
-            this.logger.debug('Configuration saved to storage');
-        } catch (error) {
-            this.logger.error('Failed to save configuration', error);
-        }
+        this.fileStorage.save(this.STORAGE_FILENAME, this.config);
+        this.logger.debug('Configuration saved to file storage');
     }
 
     /**
@@ -366,14 +375,21 @@ export class ConfigProviderService {
 
     // ==================== 上下文配置 ====================
 
+    /** 上下文配置存储键名 */
+    private readonly CONTEXT_CONFIG_FILENAME = 'context-config';
+
+    /** 自动压缩配置存储键名 */
+    private readonly AUTO_COMPACT_FILENAME = 'auto-compact';
+
     /**
      * 获取上下文配置
      */
     getContextConfig(): ContextConfig | null {
         try {
-            const key = 'tabby-ai-assistant-context-config';
-            const stored = localStorage.getItem(key);
-            return stored ? JSON.parse(stored) : null;
+            return this.fileStorage.load<ContextConfig | null>(
+                this.CONTEXT_CONFIG_FILENAME,
+                null
+            );
         } catch {
             return null;
         }
@@ -383,23 +399,20 @@ export class ConfigProviderService {
      * 设置上下文配置
      */
     setContextConfig(config: ContextConfig): void {
-        const key = 'tabby-ai-assistant-context-config';
-        localStorage.setItem(key, JSON.stringify(config));
+        this.fileStorage.save(this.CONTEXT_CONFIG_FILENAME, config);
     }
 
     /**
      * 获取自动压缩开关状态
      */
     isAutoCompactEnabled(): boolean {
-        const key = 'tabby-ai-assistant-auto-compact';
-        return localStorage.getItem(key) !== 'false';
+        return this.fileStorage.load<boolean>(this.AUTO_COMPACT_FILENAME, true);
     }
 
     /**
      * 设置自动压缩开关状态
      */
     setAutoCompactEnabled(enabled: boolean): void {
-        const key = 'tabby-ai-assistant-auto-compact';
-        localStorage.setItem(key, String(enabled));
+        this.fileStorage.save(this.AUTO_COMPACT_FILENAME, enabled);
     }
 }

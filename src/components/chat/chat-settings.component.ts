@@ -24,6 +24,7 @@ export class ChatSettingsComponent implements OnInit, OnDestroy {
         showAvatars: boolean;
         enterToSend: boolean;
         soundEnabled: boolean;
+        agentMaxRounds: number;
     } = {
         chatHistoryEnabled: true,
         maxChatHistory: 100,
@@ -34,7 +35,8 @@ export class ChatSettingsComponent implements OnInit, OnDestroy {
         showTimestamps: true,
         showAvatars: true,
         enterToSend: true,
-        soundEnabled: true
+        soundEnabled: true,
+        agentMaxRounds: 50
     };
 
     // 翻译对象
@@ -104,6 +106,7 @@ export class ChatSettingsComponent implements OnInit, OnDestroy {
         this.settings.showAvatars = this.config.get('ui.showAvatars', true) ?? true;
         this.settings.enterToSend = this.config.get('ui.enterToSend', true) ?? true;
         this.settings.soundEnabled = this.config.get('ui.soundEnabled', true) ?? true;
+        this.settings.agentMaxRounds = this.config.get('agentMaxRounds', 50) ?? 50;
     }
 
     /**
@@ -189,7 +192,8 @@ export class ChatSettingsComponent implements OnInit, OnDestroy {
                 showTimestamps: true,
                 showAvatars: true,
                 enterToSend: true,
-                soundEnabled: true
+                soundEnabled: true,
+                agentMaxRounds: 50
             };
 
             // 保存所有设置
@@ -197,6 +201,8 @@ export class ChatSettingsComponent implements OnInit, OnDestroy {
                 const configKey = key.includes('.') ? key : `ui.${key}`;
                 this.saveSetting(configKey, value);
             });
+            // 单独保存 agentMaxRounds（不在 ui 命名空间下）
+            this.saveSetting('agentMaxRounds', this.settings.agentMaxRounds);
 
             this.logger.info('Chat settings reset to defaults');
             alert(this.t.providers.configSaved);
