@@ -12,6 +12,7 @@ import { ConfigProviderService } from './config-provider.service';
 import { TerminalContextService } from '../terminal/terminal-context.service';
 import { TerminalToolsService } from '../terminal/terminal-tools.service';
 import { TerminalManagerService } from '../terminal/terminal-manager.service';
+import { SecurityValidatorService } from '../security/security-validator.service';
 // 使用延迟注入获取 AiSidebarService 以打破循环依赖
 import type { AiSidebarService } from '../chat/ai-sidebar.service';
 import { LoggerService } from './logger.service';
@@ -37,6 +38,7 @@ export class AiAssistantService {
         private terminalContext: TerminalContextService,
         private terminalTools: TerminalToolsService,
         private terminalManager: TerminalManagerService,
+        private securityValidator: SecurityValidatorService,
         private injector: Injector,
         private logger: LoggerService,
         // 注入所有提供商服务
@@ -1065,7 +1067,7 @@ export class AiAssistantService {
         // 配置参数
         const maxRounds = config.maxRounds || 15;
         const timeoutMs = config.timeoutMs || 120000;  // 默认 2 分钟
-        const repeatThreshold = config.repeatThreshold || 3;  // 重复调用阈值
+        const repeatThreshold = config.repeatThreshold || 5;  // 重复调用阈值（提高到 5，避免正常多次调用被误判）
         const failureThreshold = config.failureThreshold || 2;  // 连续失败阈值
 
         const callbacks = {
@@ -1086,6 +1088,17 @@ export class AiAssistantService {
         return new Observable<AgentStreamEvent>((subscriber) => {
             // 消息历史副本（用于多轮对话）
             const conversationMessages: ChatMessage[] = [...(request.messages || [])];
+
+            // === 新增：添加 Agent 执行规则系统提示 ===
+            const taskContextMessage: ChatMessage = {
+                id: this.generateId(),
+                role: MessageRole.SYSTEM,
+                content: this.buildAgentSystemPrompt(),
+                timestamp: new Date()
+            };
+
+            // 将任务强调消息插入到消息列表最前面
+            conversationMessages.unshift(taskContextMessage);
 
             // 递归执行单轮对话
             const runSingleRound = async (): Promise<void> => {
@@ -1177,15 +1190,23 @@ export class AiAssistantService {
                                 this.logger.debug(`Round ${agentState.currentRound} ended, messages in conversation: ${conversationMessages.length}`);
 
                                 // 将本轮 AI 回复添加到消息历史
-                                if (roundTextContent) {
+                                // 关键修复：即使没有文本内容，只要有工具调用也必须添加 assistant 消息
+                                // 否则 tool_use 块会丢失，导致下一轮请求时 tool_result 找不到对应的 tool_use
+                                if (roundTextContent || pendingToolCalls.length > 0) {
                                     conversationMessages.push({
                                         id: this.generateId(),
                                         role: MessageRole.ASSISTANT,
-                                        content: roundTextContent,
-                                        timestamp: new Date()
+                                        content: roundTextContent || '', // 即使为空也要添加
+                                        timestamp: new Date(),
+                                        // 保留工具调用记录，供下一轮 transformMessages 构建 Anthropic tool_use 格式
+                                        toolCalls: pendingToolCalls.map(tc => ({
+                                            id: tc.id,
+                                            name: tc.name,
+                                            input: tc.input
+                                        }))
                                     });
                                     // 更新 Agent 状态的 lastAiResponse
-                                    agentState.lastAiResponse = roundTextContent;
+                                    agentState.lastAiResponse = roundTextContent || '';
                                 }
 
                                 // 执行智能终止检测 (AI 响应后)
@@ -1196,6 +1217,44 @@ export class AiAssistantService {
                                     { maxRounds, timeoutMs, repeatThreshold, failureThreshold },
                                     'after_ai_response'
                                 );
+
+                                // 【新增】检测 AI 输出 <invoke> 文本但没有实际工具调用的情况
+                                // 这通常是 AI 模仿了 XML 格式而不是真正调用工具
+                                const hasInvokeText = roundTextContent && (
+                                    roundTextContent.includes('<invoke') ||
+                                    roundTextContent.includes('<parameter') ||
+                                    roundTextContent.includes('</invoke>')
+                                );
+                                const noActualToolCalls = pendingToolCalls.length === 0;
+
+                                if (hasInvokeText && noActualToolCalls && agentState.currentRound < maxRounds) {
+                                    this.logger.warn('Detected <invoke> text without actual tool calls, forcing retry', {
+                                        round: agentState.currentRound,
+                                        textPreview: roundTextContent.slice(0, 200)
+                                    });
+
+                                    // 添加纠正提示到消息历史
+                                    conversationMessages.push({
+                                        id: this.generateId(),
+                                        role: MessageRole.USER,
+                                        content: `【系统提示】你输出了 <invoke> 格式的文本，但这不是正确的工具调用方式。请直接调用工具，不要用文本描述工具调用。系统会自动处理你的工具调用请求。`,
+                                        timestamp: new Date()
+                                    });
+
+                                    // 发送重试事件
+                                    subscriber.next({
+                                        type: 'text_delta',
+                                        textDelta: '\n\n[系统：检测到格式错误，正在重试...]\n'
+                                    });
+
+                                    // 强制重试
+                                    try {
+                                        await runSingleRound();
+                                    } catch (retryError) {
+                                        this.logger.error('Retry round error', retryError);
+                                    }
+                                    return;
+                                }
 
                                 if (termination.shouldTerminate) {
                                     this.logger.info('Agent terminated by smart detector', { reason: termination.reason });
@@ -1266,15 +1325,32 @@ export class AiAssistantService {
                                         subscriber.error(recursionError);
                                     }
                                 } else {
-                                    // 没有工具调用，Agent 循环完成
-                                    this.logger.info(`Agent completed: ${agentState.currentRound} rounds, reason: no_tools`);
-                                    subscriber.next({
-                                        type: 'agent_complete',
-                                        reason: 'no_tools',
-                                        totalRounds: agentState.currentRound
-                                    });
-                                    callbacks.onAgentComplete?.('no_tools', agentState.currentRound);
-                                    subscriber.complete();
+                                    // 没有工具调用
+                                    // 如果 checkTermination 返回 shouldTerminate: false（检测到未完成暗示），继续下一轮
+                                    if (!termination.shouldTerminate) {
+                                        this.logger.info(`No tools but incomplete hint detected (${termination.reason}), continuing to next round`);
+                                        try {
+                                            await runSingleRound();
+                                        } catch (recursionError) {
+                                            this.logger.error('Recursive round error', recursionError);
+                                            subscriber.next({
+                                                type: 'error',
+                                                error: `执行循环中断: ${recursionError instanceof Error ? recursionError.message : 'Unknown error'}`
+                                            });
+                                            subscriber.error(recursionError);
+                                        }
+                                    } else {
+                                        // 真正完成，终止 Agent
+                                        this.logger.info(`Agent completed: ${agentState.currentRound} rounds, reason: ${termination.reason}`);
+                                        subscriber.next({
+                                            type: 'agent_complete',
+                                            reason: termination.reason,
+                                            totalRounds: agentState.currentRound,
+                                            terminationMessage: termination.message
+                                        });
+                                        callbacks.onAgentComplete?.(termination.reason, agentState.currentRound);
+                                        subscriber.complete();
+                                    }
                                 }
 
                                 resolve();
@@ -1328,6 +1404,56 @@ export class AiAssistantService {
             const startTime = Date.now();
 
             try {
+                // 对 write_to_terminal 工具进行安全验证
+                if (toolCall.name === 'write_to_terminal' && toolCall.input?.command) {
+                    const command = toolCall.input.command;
+                    const validation = await this.securityValidator.validateAndConfirm(
+                        command,
+                        'AI 请求执行此命令'
+                    );
+
+                    if (!validation.approved) {
+                        // 用户拒绝执行
+                        const duration = Date.now() - startTime;
+                        subscriber.next({
+                            type: 'tool_executed',
+                            toolCall: {
+                                id: toolCall.id,
+                                name: toolCall.name,
+                                input: toolCall.input
+                            },
+                            toolResult: {
+                                tool_use_id: toolCall.id,
+                                content: `⚠️ 命令被拒绝: ${validation.reason || '用户取消'}`,
+                                is_error: true,
+                                duration
+                            }
+                        });
+
+                        results.push({
+                            tool_use_id: toolCall.id,
+                            name: toolCall.name,
+                            content: `命令被用户拒绝: ${validation.reason || '用户取消'}`,
+                            is_error: true
+                        });
+
+                        // 记录到 Agent 状态历史
+                        if (agentState) {
+                            agentState.toolCallHistory.push({
+                                name: toolCall.name,
+                                input: toolCall.input,
+                                inputHash: this.hashInput(toolCall.input),
+                                success: false,
+                                timestamp: Date.now()
+                            });
+                        }
+
+                        continue; // 跳过此工具的执行
+                    }
+
+                    this.logger.info('Command approved by user', { command, riskLevel: validation.riskLevel });
+                }
+
                 const result = await this.terminalTools.executeToolCall(toolCall);
                 const duration = Date.now() - startTime;
 
@@ -1417,7 +1543,7 @@ export class AiAssistantService {
 
     /**
      * 构建工具结果消息
-     * 使用清晰的格式让 AI 理解工具已执行完成
+     * 关键：添加 toolResults 和 tool_use_id 字段，供 transformMessages 正确识别和处理
      */
     private buildToolResultMessage(results: ToolResult[]): ChatMessage {
         const content = results.map(r => {
@@ -1431,7 +1557,16 @@ export class AiAssistantService {
             role: MessageRole.TOOL,
             // 添加提示让 AI 继续完成用户的其他请求
             content: `工具已执行完成：\n\n${content}\n\n请检查用户的原始请求，如果还有未完成的任务，请继续调用相应工具完成。如果所有任务都已完成，请总结结果回复用户。`,
-            timestamp: new Date()
+            timestamp: new Date(),
+            // 关键：添加 toolResults 字段供 transformMessages 识别
+            toolResults: results.map(r => ({
+                tool_use_id: r.tool_use_id,
+                name: r.name,
+                content: r.content,
+                is_error: r.is_error
+            })),
+            // 保留 tool_use_id 供简单识别
+            tool_use_id: results[0]?.tool_use_id || ''
         };
     }
 
@@ -1495,6 +1630,15 @@ export class AiAssistantService {
                     });
                     return { shouldTerminate: false, reason: 'no_tools' };
                 }
+
+                // === 新增：检查 AI 是否提到了工具名但没调用 ===
+                if (this.mentionsToolWithoutCalling(state.lastAiResponse)) {
+                    this.logger.warn('AI mentioned tool but did not call it, continuing', {
+                        response: state.lastAiResponse.substring(0, 100)
+                    });
+                    return { shouldTerminate: false, reason: 'mentioned_tool' };
+                }
+
                 // 检查总结关键词
                 if (this.hasSummaryHint(state.lastAiResponse)) {
                     return {
@@ -1593,7 +1737,7 @@ export class AiAssistantService {
         // 中文模式
         /现在.{0,6}(为您|帮您|给您|查看|执行|检查)/,       // 现在为您、现在继续为您
         /继续.{0,4}(为您|帮您|查看|执行|检查|获取)/,       // 继续为您、继续查看
-        /(让我|我来|我将|我会).{0,6}(查看|执行|检查|获取)/, // 让我查看、我来执行
+        /(让我|我来|我将|我会).{0,6}(查看|执行|检查|获取|点击|打开|选择)/, // 让我查看、让我点击
         /(正在|开始|准备).{0,4}(执行|查看|检查|获取)/,     // 正在执行、开始查看
         /(接下来|然后|之后|随后).{0,4}(将|会|要)/,         // 接下来将、然后会
         /(马上|立即|即将|稍后|待会).{0,4}(为您|执行|查看)/, // 马上为您、即将执行
@@ -1604,17 +1748,124 @@ export class AiAssistantService {
         /(先|首先|第一).{0,4}(看看|检查|执行)/,             // 先看看、首先检查
         /下面.{0,4}(将|会|要|是)/,                         // 下面将、下面是
         /(等一下|稍等|请稍候)/,                             // 等待提示
+        // === 新增：MCP 和工具相关模式 ===
+        /(让我|我来|我将|我会).{0,30}(使用|调用|执行|查询|访问|点击|打开|选择|滚动|输入)/,  // 浏览器操作
+        /使用.{0,20}(工具|MCP|浏览器).*?(查询|访问|获取)/,        // 使用工具模式
+        /(MCP|mcp).{0,15}(工具|浏览器|服务|server)/i,            // MCP 相关操作
+        /访问.{0,15}(官网|网站|URL|链接|网址)/,                   // 访问网站
+        /(查询|获取|搜索).{0,10}(信息|数据|结果|推荐)/,           // 查询信息
+        /浏览器.{0,10}(工具|访问|打开)/,                          // 浏览器操作
+        /(下一步|接下来|然后).{0,15}(使用|调用|执行|查询)/,       // 步骤预告（更宽）
+        /现在.{0,15}(重新|继续|使用|调用|执行|让我|查询|获取|搜索)/, // 现在使用/查询（含重新）
+        // === 新增：重新/继续/再次类模式（高优先级） ===
+        /重新.{0,10}(查询|搜索|获取|执行|尝试|加载|刷新)/,        // 重新查询、重新搜索
+        /继续.{0,10}(查询|搜索|获取|执行|尝试)/,                  // 继续查询
+        /再次.{0,10}(查询|搜索|获取|执行|尝试)/,                  // 再次执行
+        /再.{0,6}(查一下|看一下|执行|获取)/,                      // 再查一下、再执行
+        /还有.{0,10}(需要|要|可以)/,                              // 还有需要
+        /另外.{0,10}(需要|要|可以)/,                              // 另外还需要
+        /让我再.{0,10}/,                                          // 让我再看看
+        /我再.{0,10}/,                                            // 我再查询一下
+        /我再.{0,10}(次|一下)/,                                   // 我再一次
+        /再试.{0,6}/,                                             // 再试一次
+        /尝试.{0,10}(查询|搜索|执行|获取)/,                       // 尝试查询
+        /看看能否.{0,10}/,                                        // 看看能否
+        /检查一下.{0,10}/,                                        // 检查一下
+        /确认.{0,10}(是否|有没有)/,                               // 确认一下
+        /试.{0,6}(着|一下|看)/,                                   // 试一下、试试
+        /查.{0,6}(看|一下|询)/,                                   // 查查看
+        /查一下.{0,10}/,                                          // 查一下
+        /获取.{0,10}(更多|其他、最新)/,                           // 获取更多信息
+        /查看.{0,10}(更多|其他|详情)/,                            // 查看更多
+        /然后.{0,15}(查询|搜索|获取|执行)/,                       // 然后查询
+        /接下来.{0,15}(查询|搜索|获取|执行)/,                     // 接下来查询
+        /现在重新/,                                               // 现在重新（通用）
+        /继续执行/,                                               // 继续执行
+        /再次执行/,                                               // 再次执行
+        /重新加载/,                                               // 重新加载
+        /刷新.{0,6}/,                                             // 刷新页面等
         // 英文模式
         /\b(let me|i('ll| will| am going to))\b/i,
         /\b(now i|first i|next i)\b/i,
-        /\b(going to|about to|starting to)\b/i,
+        /\b(going to|about to|starting to|ready to|prepared to)\b/i,  // 扩展：ready to, prepared to
         /\b(will now|shall now|let's)\b/i,
         /\b(proceed(ing)? to|continu(e|ing) to)\b/i,
         /\b(executing|running|checking|fetching)\b/i,
         /\b(step \d|first,?|next,?|then,?)\b/i,
-        /\b(wait(ing)?|hold on)\b/i,                      // waiting, hold on
-        /\b(i need to|i have to)\b/i,                     // I need to, I have to
-        /\b(looking (at|into|for))\b/i,                   // looking at/into/for
+        /\b(wait(ing)?|hold on|stand by|just a moment)\b/i,  // 扩展：stand by, just a moment
+        /\b(i need to|i have to)\b/i,
+        /\b(looking (at|into|for))\b/i,
+        // === 新增：英文浏览器操作动词 ===
+        /\b(click(ing)?|open(ing)?|select(ing)?)\b/i,
+        /\b(scroll(ing)?|type|typing|input(ting)?)\b/i,
+        /\b(navigat(e|ing)|brows(e|ing))\b/i,
+        /\b(submit(ting)?|enter(ing)?)\b/i,
+        // === 新增：英文重试/再次类模式（高优先级） ===
+        /\bagain\b/i,                                           // try again
+        /\b(re)?try(ing)?\b/i,                                  // retry, trying
+        /\b(re)?search(ing)?\b/i,                               // research, searching
+        /\b(re)?visit(ing)?\b/i,                                // revisit
+        /\b(re)?fresh(ing)?\b/i,                                // refresh
+        /\b(re)?load(ing)?\b/i,                                 // reload
+        /\b(another|one more|once more)\b/i,                    // one more time
+        /\b(second|next) (try|time)\b/i,                        // second try
+        // === 新增：英文意图执行类模式 ===
+        /\blet me try\b/i,
+        /\bI('ll| will) try\b/i,
+        /\bI('m| am) going to try\b/i,
+        /\bneed to (try|check|search|find)\b/i,
+        /\bhave to (try|check|search|find)\b/i,
+        /\bshould (try|check|search|find)\b/i,
+        /\bshould try\b/i,
+        /\bmust (try|check|search|find)\b/i,
+        /\btry to (find|get|check|search)\b/i,
+        /\battempt(ing)? to\b/i,
+        /\bwork on\b/i,
+        /\bhandle this\b/i,
+        /\bdeal with\b/i,
+        /\btake care of\b/i,
+        /\bprocess(ing)?\b/i,
+        /\bmanag(e|ing)?\b/i,
+        /\bexecut(e|ion|ing)\b/i,
+        /\bproceed\b/i,
+        /\bcontinu(e|ing)\b/i,
+        /\bfollow up\b/i,
+        /\blook into\b/i,
+        /\binvestigat(e|ing)?\b/i,
+        /\bexplor(e|ing)?\b/i,
+        /\bcheck (on|for|into)\b/i,
+        /\bverify\b/i,
+        /\bvalidat(e|ing)?\b/i,
+        /\bconfirm(ing)?\b/i,
+        /\bfetch(ing)?\b/i,
+        /\bretriev(e|ing|al)?\b/i,
+        /\bquer(y|ies|ing)\b/i,
+        /\brequest(ing)?\b/i,
+        /\bobtain(ing)?\b/i,
+        /\bacquir(e|ing)?\b/i,
+        /\bconsult(ing)?\b/i,
+        /\brefer(ring)? to\b/i,
+        /\bexamin(e|ing)?\b/i,
+        /\binspect(ing)?\b/i,
+        /\breview(ing)?\b/i,
+        /\bmonitor(ing)?\b/i,
+        /\btrack(ing)?\b/i,
+        /\bwatch(ing)?\b/i,
+        /\bwait(ing)? for\b/i,
+        /\bon it\b/i,
+        /\bto do\b/i,
+        // === 新增：中文"好的/没问题，我来"类模式 ===
+        /好的.?([，,]|我|来)/,                                        // 好的，我来、好的，我帮您
+        /(好的|好的嘞|好的呀|好嘞|好啊)[，, ]?(我来|我帮|我给)/,      // 好的，我来帮您
+        /(没问题|没问题呀)[，, ]?(我来|我帮|我给)/,                   // 没问题，我来帮你
+        /(好的|好的)[，, ]?(我|让我)[帮|给]/,                          // 好的，我帮您
+        /(那我们|我们)[，, ]?(先|来)/,                                 // 那我们先、我们来
+        /(好的|好)[，, ]?(那|就先)/,                                   // 好的，那先、就先
+        /(行|行吧|好的)[，, ]?(我|让我)/,                              // 行吧，我来
+        /(嗯|嗯嗯)[，, ]?(我|让我|我来)/,                              // 嗯，我来
+        /(OK|ok|Okay|okay)[，, ]?(我|让我)/,                          // OK，我来
+        /(明白|懂了)[，, ]?(我|让我|我来)/,                            // 明白，我来
+        /(收到|收到)[，, ]?(我|让我|我来)/,                            // 收到，我来
     ];
 
     // 总结暗示模式
@@ -1628,13 +1879,101 @@ export class AiAssistantService {
         /(全部|所有|均).{0,4}(完成|执行完|结束)/,           // 全部完成
         /以上.{0,4}(就是|便是|为)/,                        // 以上就是
         /这.{0,4}(就是|便是).*结果/,                       // 这就是结果
+        /本次.{0,4}(任务|操作).{0,4}(完成|结束)/,           // 本次任务完成
+        /(以上就是|便是).{0,10}(结果|总结)/,               // 以上就是结果
+        /(结果|答案|信息).{0,4}(如下|在此|在这里)/,         // 结果如下
+        /请.{0,4}(查收|查看|参考)/,                        // 请查收
         // 英文模式
         /\b(completed?|finished|done|all set)\b/i,
         /\b(in summary|to summarize|here('s| is) (the|a) summary)\b/i,
         /\b(task (is )?completed?|successfully (completed?|executed?))\b/i,
         /\b(that's (all|it)|we('re| are) done)\b/i,        // that's all, we're done
         /\b(above (is|are)|here (is|are) the result)\b/i,
+        // === 新增：总结完成类模式 ===
+        /\bwrap up\b/i,
+        /\bwind up\b/i,
+        /\bfinish up\b/i,
+        /\bconclud(e|ing)?\b/i,
+        /\bfinaliz(e|ing)?\b/i,
+        /\bwrap things up\b/i,
+        /\bterminat(e|ing)?\b/i,
+        /\bend (it|this|now)\b/i,
+        /\bstop (it|here|now)\b/i,
+        /\bhalt(ing)?\b/i,
+        /\bclose (this|it|up)\b/i,
+        /\bhere('s| is) (the|your) (result|answer|information)\b/i,
+        /\bplease (see|check|review)\b/i,
+        /\bfor your (reference|review)\b/i,
+        // === 新增：更多完成类模式 ===
+        /\b(all done|that's it|that('s| is) (all|it))\b/i,
+        /\bjob done\b/i,
+        /\bmission complete\b/i,
+        /\bexecution complete\b/i,
+        /\bprocess (complete|finished)\b/i,
+        /\boperation (complete|finished|done)\b/i,
+        /\b(request )?complete\b/i,
+        /\bwe('re| are) (all )?set\b/i,
+        /\beverything (is )?(done|complete|set)\b/i,
+        /\byou('re| are) (all )?set\b/i,
+        /\bhere('s| is) everything\b/i,
+        /\bthat should be (all|it)\b/i,
+        /\bthat should do (it|the trick)\b/i,
+        /\blet me know if you need anything else\b/i,
+        /\bfeel free to ask\b/i,
+        /\bhave a great day\b/i,
+        /\bhappy (coding|terminal|computing)\b/i,
     ];
+
+    /**
+     * 检测 AI 回复中是否提到了工具但没有调用
+     * 用于防止 AI 说要执行工具但实际没调用的情况
+     */
+    private mentionsToolWithoutCalling(text: string): boolean {
+        if (!text || text.length < 2) return false;
+
+        // 检测 MCP 工具提及
+        const mcpPatterns = [
+            /mcp_\w+/i,                           // mcp_xxx 格式的工具名
+            /MCP.{0,10}(工具|浏览器|服务)/,       // MCP工具、MCP浏览器
+            /浏览器.{0,5}工具/,                   // 浏览器工具
+            /使用.{0,10}工具.{0,10}(访问|查询|获取)/, // 使用xxx工具访问
+        ];
+
+        // 检测内置工具提及
+        const builtinToolPatterns = [
+            /write_to_terminal/i,
+            /read_terminal_output/i,
+            /focus_terminal/i,
+            /get_terminal_list/i,
+        ];
+
+        const allPatterns = [...mcpPatterns, ...builtinToolPatterns];
+
+        return allPatterns.some(p => p.test(text));
+    }
+
+    /**
+     * 构建 Agent 执行规则系统提示
+     * 精简版本：减少详细描述，防止 AI 模仿 XML 格式
+     */
+    private buildAgentSystemPrompt(): string {
+        return `## Agent 模式
+你是一个任务执行 Agent，具备终端操作、浏览器操作等能力。
+
+### 工具使用规则
+1. 需要执行操作时，直接调用工具
+2. 调用工具后等待系统返回真实结果
+3. 完成所有任务后，调用 task_complete 工具
+
+### 严禁行为
+❌ 用文本描述工具调用（如 <invoke>、<parameter> 标签）
+❌ 假装工具执行成功
+❌ 在收到真实结果前回复用户
+
+### 提示
+- 你的工具调用由系统自动处理，不需要手动描述格式
+- 如果看到 tool_result，那是真实的执行结果`;
+    }
 
     /**
      * 计算输入的哈希值（用于重复检测）
