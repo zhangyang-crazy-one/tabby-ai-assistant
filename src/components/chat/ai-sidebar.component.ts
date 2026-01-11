@@ -82,75 +82,74 @@ import { AnyUIStreamEvent } from '../../services/tools/types/ui-stream-event.typ
                             <path d="M8.5 1.866a1 1 0 1 0-1 0V3h-2A4.5 4.5 0 0 0 1 7.5V8a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1v1a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1v-.5A4.5 4.5 0 0 0 10.5 3h-2V1.866ZM14 7.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7.5A3.5 3.5 0 0 1 5.5 4h5A3.5 3.5 0 0 1 14 7.5Z"/>
                         </svg>
                     </div>
-                        <div class="message-content">
-                            <div class="message-header">
-                                <span class="message-role">
-                                    {{ message.role === 'user' ? '用户' : message.role === 'assistant' ? 'AI' : '系统' }}
-                                </span>
-                                <span class="message-time">{{ formatTimestamp(message.timestamp) }}</span>
-                            </div>
-
-                            <!-- 兼容旧数据：如果没有 uiBlocks，显示 content -->
-                            <ng-container *ngIf="!message.uiBlocks || message.uiBlocks.length === 0">
-                                <div class="message-text" [innerHTML]="formatMessage(message.content)"></div>
-                            </ng-container>
-
-                            <!-- 新数据：遍历 uiBlocks -->
-                            <ng-container *ngIf="message.uiBlocks && message.uiBlocks.length > 0">
-                                <ng-container *ngFor="let block of message.uiBlocks">
-                                    
-                                    <!-- 1. 文本块 -->
-                                    <div *ngIf="block.type === 'text'" 
-                                         class="message-text" 
-                                         [innerHTML]="formatMessage(block.content)">
-                                    </div>
-
-                                    <!-- 2. 工具块 -->
-                                    <div *ngIf="block.type === 'tool'" 
-                                         class="tool-call-card"
-                                         [ngClass]="{
-                                             'tool-executing': block.status === 'executing',
-                                             'tool-success': block.status === 'success',
-                                             'tool-error': block.status === 'error'
-                                         }">
-                                        <div class="tool-header">
-                                            <span class="tool-icon">
-                                                <ng-container [ngSwitch]="block.status">
-                                                    <ng-container *ngSwitchCase="'executing'">🔧</ng-container>
-                                                    <ng-container *ngSwitchCase="'success'">✅</ng-container>
-                                                    <ng-container *ngSwitchCase="'error'">❌</ng-container>
-                                                    <ng-container *ngSwitchDefault>🔧</ng-container>
-                                                </ng-container>
-                                            </span>
-                                            <span class="tool-name">{{ block.name }}</span>
-                                            <span class="tool-status" *ngIf="block.status === 'executing'">执行中...</span>
-                                            <span class="tool-duration" *ngIf="block.status !== 'executing' && block.duration">{{ block.duration }}ms</span>
-                                        </div>
-                                        <!-- 工具输出 -->
-                                        <div *ngIf="block.output && block.output.content" class="tool-output">
-                                            <div class="tool-output-header">输出:</div>
-                                            <pre class="tool-output-content">{{ block.output.content }}</pre>
-                                            <div *ngIf="block.output.truncated" class="tool-output-truncated">...(已截断)</div>
-                                        </div>
-                                        <!-- 错误消息 -->
-                                        <div *ngIf="block.status === 'error' && block.errorMessage" class="tool-output tool-error-message">
-                                            <pre class="tool-output-content">{{ block.errorMessage }}</pre>
-                                        </div>
-                                    </div>
-
-                                    <!-- 3. 分隔线块 -->
-                                    <div *ngIf="block.type === 'divider'" class="round-divider">
-                                        <span>--- 第 {{ block.round }} 轮 ---</span>
-                                    </div>
-
-                                    <!-- 4. 状态块 -->
-                                    <div *ngIf="block.type === 'status'" class="agent-status">
-                                        <span>{{ block.icon }} {{ block.text }}<span *ngIf="block.rounds"> ({{ block.rounds }} 轮)</span></span>
-                                    </div>
-                                    
-                                </ng-container>
-                            </ng-container>
+                    <div class="message-content">
+                        <div class="message-header">
+                            <span class="message-role">
+                                {{ message.role === 'user' ? '用户' : message.role === 'assistant' ? 'AI' : '系统' }}
+                            </span>
+                            <span class="message-time">{{ formatTimestamp(message.timestamp) }}</span>
                         </div>
+
+                        <!-- 兼容旧数据：如果没有 uiBlocks，显示 content -->
+                        <ng-container *ngIf="!message.uiBlocks || message.uiBlocks.length === 0">
+                            <div class="message-text" [innerHTML]="formatMessage(message.content)"></div>
+                        </ng-container>
+
+                        <!-- 新数据：遍历 uiBlocks -->
+                        <ng-container *ngIf="message.uiBlocks && message.uiBlocks.length > 0">
+                            <ng-container *ngFor="let block of message.uiBlocks">
+
+                                <!-- 1. 文本块 -->
+                                <div *ngIf="block.type === 'text'" 
+                                     class="message-text" 
+                                     [innerHTML]="formatMessage(block.content)">
+                                </div>
+
+                                <!-- 2. 工具块 -->
+                                <div *ngIf="block.type === 'tool'" 
+                                     class="tool-call-card"
+                                     [ngClass]="{
+                                         'tool-executing': block.status === 'executing',
+                                         'tool-success': block.status === 'success',
+                                         'tool-error': block.status === 'error'
+                                     }">
+                                    <div class="tool-header">
+                                        <span class="tool-icon">
+                                            <ng-container [ngSwitch]="block.status">
+                                                <ng-container *ngSwitchCase="'executing'">🔧</ng-container>
+                                                <ng-container *ngSwitchCase="'success'">✅</ng-container>
+                                                <ng-container *ngSwitchCase="'error'">❌</ng-container>
+                                                <ng-container *ngSwitchDefault>🔧</ng-container>
+                                            </ng-container>
+                                        </span>
+                                        <span class="tool-name">{{ block.name }}</span>
+                                        <span class="tool-status" *ngIf="block.status === 'executing'">执行中...</span>
+                                        <span class="tool-duration" *ngIf="block.status !== 'executing' && block.duration">{{ block.duration }}ms</span>
+                                    </div>
+                                    <!-- 工具输出 -->
+                                    <div *ngIf="block.output && block.output.content" class="tool-output">
+                                        <div class="tool-output-header">输出:</div>
+                                        <pre class="tool-output-content">{{ block.output.content }}</pre>
+                                        <div *ngIf="block.output.truncated" class="tool-output-truncated">...(已截断)</div>
+                                    </div>
+                                    <!-- 错误消息 -->
+                                    <div *ngIf="block.status === 'error' && block.errorMessage" class="tool-output tool-error-message">
+                                        <pre class="tool-output-content">{{ block.errorMessage }}</pre>
+                                    </div>
+                                </div>
+
+                                <!-- 3. 分隔线块 -->
+                                <div *ngIf="block.type === 'divider'" class="round-divider">
+                                    <span>--- 第 {{ block.round }} 轮 ---</span>
+                                </div>
+
+                                <!-- 4. 状态块 -->
+                                <div *ngIf="block.type === 'status'" class="agent-status">
+                                    <span>{{ block.icon }} {{ block.text }}<span *ngIf="block.rounds"> ({{ block.rounds }} 轮)</span></span>
+                                </div>
+
+                            </ng-container>
+                        </ng-container>
                     </div>
                 </div>
 
