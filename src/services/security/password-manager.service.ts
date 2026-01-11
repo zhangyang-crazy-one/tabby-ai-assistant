@@ -2,17 +2,26 @@ import { Injectable } from '@angular/core';
 import * as CryptoJS from 'crypto-js';
 import { PasswordValidationResult } from '../../types/security.types';
 import { LoggerService } from '../core/logger.service';
+import { FileStorageService } from '../core/file-storage.service';
 
 @Injectable({ providedIn: 'root' })
 export class PasswordManagerService {
     private readonly STORAGE_KEY = 'ai-assistant-password-hash';
+    private readonly STATE_KEY = 'ai-assistant-password-state';
     private readonly MAX_ATTEMPTS = 5;
     private readonly LOCKOUT_TIME = 15 * 60 * 1000; // 15分钟
 
     private attempts = 0;
     private lockoutUntil: number | null = null;
 
-    constructor(private logger: LoggerService) {
+    /** 文件存储键名 */
+    private readonly PASSWORD_FILENAME = 'password';
+    private readonly PASSWORD_STATE_FILENAME = 'password-state';
+
+    constructor(
+        private logger: LoggerService,
+        private fileStorage: FileStorageService
+    ) {
         this.loadState();
     }
 
@@ -21,7 +30,7 @@ export class PasswordManagerService {
      */
     setPassword(password: string): void {
         const hash = this.hashPassword(password);
-        localStorage.setItem(this.STORAGE_KEY, hash);
+        this.fileStorage.save(this.PASSWORD_FILENAME, { hash });
         this.logger.info('Password set successfully');
     }
 
@@ -70,14 +79,15 @@ export class PasswordManagerService {
      * 检查是否有密码保护
      */
     hasPassword(): boolean {
-        return !!localStorage.getItem(this.STORAGE_KEY);
+        const data = this.fileStorage.load<{ hash: string }>(this.PASSWORD_FILENAME, { hash: '' });
+        return !!data.hash;
     }
 
     /**
      * 清除密码
      */
     clearPassword(): void {
-        localStorage.removeItem(this.STORAGE_KEY);
+        this.fileStorage.delete(this.PASSWORD_FILENAME);
         this.resetAttempts();
         this.logger.info('Password cleared');
     }
@@ -86,14 +96,14 @@ export class PasswordManagerService {
      * 验证密码是否正确
      */
     private async verifyPassword(password: string): Promise<boolean> {
-        const storedHash = localStorage.getItem(this.STORAGE_KEY);
-        if (!storedHash) {
+        const data = this.fileStorage.load<{ hash: string }>(this.PASSWORD_FILENAME, { hash: '' });
+        if (!data.hash) {
             // 没有设置密码，允许通过
             return true;
         }
 
         const inputHash = this.hashPassword(password);
-        return inputHash === storedHash;
+        return inputHash === data.hash;
     }
 
     /**
@@ -136,7 +146,7 @@ export class PasswordManagerService {
             attempts: this.attempts,
             lockoutUntil: this.lockoutUntil
         };
-        localStorage.setItem('ai-assistant-password-state', JSON.stringify(state));
+        this.fileStorage.save(this.PASSWORD_STATE_FILENAME, state);
     }
 
     /**
@@ -144,9 +154,12 @@ export class PasswordManagerService {
      */
     private loadState(): void {
         try {
-            const stateStr = localStorage.getItem('ai-assistant-password-state');
-            if (stateStr) {
-                const state = JSON.parse(stateStr);
+            const state = this.fileStorage.load<{
+                attempts: number;
+                lockoutUntil: number | null;
+            }>(this.PASSWORD_STATE_FILENAME, { attempts: 0, lockoutUntil: null });
+
+            if (state) {
                 this.attempts = state.attempts || 0;
                 this.lockoutUntil = state.lockoutUntil;
 

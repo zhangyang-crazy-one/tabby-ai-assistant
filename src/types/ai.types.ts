@@ -17,6 +17,45 @@ export interface ChatMessage {
     content: string;
     timestamp: Date;
     metadata?: Record<string, any>;
+    // UI 渲染块（用于结构化渲染工具调用）
+    uiBlocks?: Array<{
+        type: 'text' | 'tool' | 'divider' | 'status';
+        id?: string;
+        name?: string;
+        icon?: string;
+        status?: 'executing' | 'success' | 'error';
+        content?: string;
+        output?: {
+            format: 'text' | 'code' | 'table' | 'json' | 'hidden';
+            content: string;
+            language?: string;
+            truncated: boolean;
+            originalLength: number;
+            summary?: string;
+        };
+        duration?: number;
+        errorMessage?: string;
+        round?: number;
+        text?: string;
+        detail?: string;
+        rounds?: number;
+    }>;
+    // 工具调用相关字段（用于 Agent 循环和消息转换）
+    toolCalls?: Array<{
+        id: string;
+        name: string;
+        input?: Record<string, any>;
+    }>;
+    // 工具结果相关字段（供 transformMessages 识别）
+    toolResults?: Array<{
+        tool_use_id: string;
+        name?: string;
+        content: string;
+        is_error?: boolean;
+    }>;
+    tool_use_id?: string;  // 简单工具 ID 标识
+    // 摘要标记（用于上下文压缩）
+    isSummary?: boolean;
 }
 
 // 聊天请求
@@ -392,6 +431,7 @@ export interface AgentLoopConfig {
 export type TerminationReason =
     | 'task_complete'      // AI 主动调用 task_complete 工具
     | 'no_tools'           // 本轮无工具调用
+    | 'mentioned_tool'     // AI 提及工具但未调用
     | 'summarizing'        // 检测到 AI 正在总结
     | 'repeated_tool'      // 重复调用相同工具
     | 'high_failure_rate'  // 连续失败率过高

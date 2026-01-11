@@ -74,6 +74,16 @@
             <app-chat-settings></app-chat-settings>
         </div>
 
+        <!-- MCP 服务器设置 -->
+        <div *ngIf="activeTab === 'mcp'" class="tab-content">
+            <app-mcp-settings></app-mcp-settings>
+        </div>
+
+        <!-- 数据管理设置 -->
+        <div *ngIf="activeTab === 'data'" class="tab-content">
+            <app-data-settings></app-data-settings>
+        </div>
+
         <!-- 高级设置 -->
         <div *ngIf="activeTab === 'advanced'" class="tab-content">
             <div class="advanced-settings">

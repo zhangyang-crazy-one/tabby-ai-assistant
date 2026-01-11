@@ -9,6 +9,8 @@ import { ChatHistoryService } from '../../services/chat/chat-history.service';
 import { AiSidebarService } from '../../services/chat/ai-sidebar.service';
 import { ThemeService, ThemeType } from '../../services/core/theme.service';
 import { ContextManager } from '../../services/context/manager';
+import { ToolStreamProcessorService } from '../../services/tools/tool-stream-processor.service';
+import { AnyUIStreamEvent } from '../../services/tools/types/ui-stream-event.types';
 
 /**
  * AI Sidebar 组件 - 替代 ChatInterfaceComponent
@@ -80,13 +82,77 @@ import { ContextManager } from '../../services/context/manager';
                             <path d="M8.5 1.866a1 1 0 1 0-1 0V3h-2A4.5 4.5 0 0 0 1 7.5V8a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1v1a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1v-.5A4.5 4.5 0 0 0 10.5 3h-2V1.866ZM14 7.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7.5A3.5 3.5 0 0 1 5.5 4h5A3.5 3.5 0 0 1 14 7.5Z"/>
                         </svg>
                     </div>
-                    <div class="message-content">
-                        <div class="message-header">
-                            <span class="message-role">
-                                {{ message.role === 'user' ? '用户' : message.role === 'assistant' ? 'AI' : '系统' }}
-                            </span>
-                            <span class="message-time">{{ formatTimestamp(message.timestamp) }}</span>
+                        <div class="message-content">
+                            <div class="message-header">
+                                <span class="message-role">
+                                    {{ message.role === 'user' ? '用户' : message.role === 'assistant' ? 'AI' : '系统' }}
+                                </span>
+                                <span class="message-time">{{ formatTimestamp(message.timestamp) }}</span>
+                            </div>
+                            
+                            <!-- 兼容旧数据：如果没有 uiBlocks，显示 content -->
+                            <ng-container *ngIf="!message.uiBlocks || message.uiBlocks.length === 0">
+                                <div class="message-text" [innerHTML]="formatMessage(message.content)"></div>
+                            </ng-container>
+                            
+                            <!-- 新数据：遍历 uiBlocks -->
+                            <ng-container *ngIf="message.uiBlocks && message.uiBlocks.length > 0">
+                                <ng-container *ngFor="let block of message.uiBlocks">
+                                    
+                                    <!-- 1. 文本块 -->
+                                    <div *ngIf="block.type === 'text'" 
+                                         class="message-text" 
+                                         [innerHTML]="formatMessage(block.content)">
+                                    </div>
+
+                                    <!-- 2. 工具块 -->
+                                    <div *ngIf="block.type === 'tool'" 
+                                         class="tool-call-card"
+                                         [ngClass]="{
+                                             'tool-executing': block.status === 'executing',
+                                             'tool-success': block.status === 'success',
+                                             'tool-error': block.status === 'error'
+                                         }">
+                                        <div class="tool-header">
+                                            <span class="tool-icon">
+                                                <ng-container [ngSwitch]="block.status">
+                                                    <ng-container *ngSwitchCase="'executing'">🔧</ng-container>
+                                                    <ng-container *ngSwitchCase="'success'">✅</ng-container>
+                                                    <ng-container *ngSwitchCase="'error'">❌</ng-container>
+                                                    <ng-container *ngSwitchDefault>🔧</ng-container>
+                                                </ng-container>
+                                            </span>
+                                            <span class="tool-name">{{ block.name }}</span>
+                                            <span class="tool-status" *ngIf="block.status === 'executing'">执行中...</span>
+                                            <span class="tool-duration" *ngIf="block.status !== 'executing' && block.duration">{{ block.duration }}ms</span>
+                                        </div>
+                                        <!-- 工具输出 -->
+                                        <div *ngIf="block.output && block.output.content" class="tool-output">
+                                            <div class="tool-output-header">输出:</div>
+                                            <pre class="tool-output-content">{{ block.output.content }}</pre>
+                                            <div *ngIf="block.output.truncated" class="tool-output-truncated">...(已截断)</div>
+                                        </div>
+                                        <!-- 错误消息 -->
+                                        <div *ngIf="block.status === 'error' && block.errorMessage" class="tool-output tool-error-message">
+                                            <pre class="tool-output-content">{{ block.errorMessage }}</pre>
+                                        </div>
+                                    </div>
+
+                                    <!-- 3. 分隔线块 -->
+                                    <div *ngIf="block.type === 'divider'" class="round-divider">
+                                        <span>--- 第 {{ block.round }} 轮 ---</span>
+                                    </div>
+
+                                    <!-- 4. 状态块 -->
+                                    <div *ngIf="block.type === 'status'" class="agent-status">
+                                        <span>{{ block.icon }} {{ block.text }}<span *ngIf="block.rounds"> ({{ block.rounds }} 轮)</span></span>
+                                    </div>
+                                    
+                                </ng-container>
+                            </ng-container>
                         </div>
+                    </div>
+                </div>
                         <div class="message-text" [innerHTML]="formatMessage(message.content)"></div>
                     </div>
                 </div>
@@ -199,7 +265,8 @@ export class AiSidebarComponent implements OnInit, OnDestroy, AfterViewChecked, 
         private logger: LoggerService,
         private chatHistory: ChatHistoryService,
         private themeService: ThemeService,
-        private contextManager: ContextManager
+        private contextManager: ContextManager,
+        private toolStreamProcessor: ToolStreamProcessorService
     ) { }
 
     ngOnInit(): void {
@@ -439,7 +506,7 @@ export class AiSidebarComponent implements OnInit, OnDestroy, AfterViewChecked, 
 
     /**
      * 处理发送消息 - 使用 Agent 循环模式
-     * 支持多轮工具调用自动循环
+     * 使用 ToolStreamProcessorService 处理所有工具事件
      */
     async onSendMessageWithAgent(content: string): Promise<void> {
         if (!content.trim() || this.isLoading) {
@@ -466,194 +533,28 @@ export class AiSidebarComponent implements OnInit, OnDestroy, AfterViewChecked, 
             id: this.generateId(),
             role: MessageRole.ASSISTANT,
             content: '',
+            uiBlocks: [],
             timestamp: new Date()
         };
         this.messages.push(aiMessage);
-
-        // 工具调用跟踪
-        const toolStatus = new Map<string, { name: string; startTime: number }>();
 
         try {
             // 构建用于 Agent 的消息列表（限制历史消息数量）
             const messagesForAgent = this.buildAgentMessages(userMessage);
 
-            // 使用 Agent 循环流式 API
-            this.aiService.chatStreamWithAgentLoop({
+            // 使用 ToolStreamProcessorService 处理流式事件
+            this.toolStreamProcessor.startAgentStream({
                 messages: messagesForAgent,
                 maxTokens: 2000,
                 temperature: 0.7
             }, {
-                maxRounds: this.config.get('agentMaxRounds', 50) ?? 50  // 从配置读取最大轮数
+                maxRounds: this.config.get('agentMaxRounds', 50) ?? 50
             }).pipe(
                 takeUntil(this.destroy$)
             ).subscribe({
-                next: (event: AgentStreamEvent) => {
-                    switch (event.type) {
-                        case 'text_delta':
-                            // 文本流式显示
-                            if (event.textDelta) {
-                                aiMessage.content += event.textDelta;
-                                this.shouldScrollToBottom = true;
-                            }
-                            break;
-
-                        case 'tool_use_start':
-                            // 工具开始 - 使用专门的工具卡片样式
-                            const toolName = event.toolCall?.name || 'unknown';
-                            aiMessage.content += `
-<div class="tool-call-card tool-executing">
-    <div class="tool-header">
-        <span class="tool-icon">🔧</span>
-        <span class="tool-name">${toolName}</span>
-        <span class="tool-status" id="tool-status-${event.toolCall?.id}">执行中...</span>
-    </div>
-</div>`;
-                            if (event.toolCall?.id) {
-                                toolStatus.set(event.toolCall.id, {
-                                    name: toolName,
-                                    startTime: Date.now()
-                                });
-                            }
-                            this.shouldScrollToBottom = true;
-                            break;
-
-                        case 'tool_executing':
-                            // 工具正在执行（额外状态）
-                            break;
-
-                        case 'tool_executed':
-                            // 工具完成 - 更新工具卡片
-                            if (event.toolCall && event.toolResult) {
-                                const name = toolStatus.get(event.toolCall.id)?.name || event.toolCall.name || 'unknown';
-                                const duration = event.toolResult.duration || 0;
-
-                                // 更新工具卡片状态
-                                const executingCardRegex = new RegExp(
-                                    `<div class="tool-call-card tool-executing">\\s*<div class="tool-header">\\s*<span class="tool-icon">🔧</span>\\s*<span class="tool-name">${name}</span>[^]*?</div>\\s*</div>`,
-                                    'g'
-                                );
-
-                                // 构建工具结果卡片
-                                let toolCard = `
-<div class="tool-call-card tool-success">
-    <div class="tool-header">
-        <span class="tool-icon">✅</span>
-        <span class="tool-name">${name}</span>
-        <span class="tool-duration">${duration}ms</span>
-    </div>`;
-
-                                // 添加工具输出
-                                if (event.toolResult.content && !event.toolResult.is_error) {
-                                    const preview = event.toolResult.content.substring(0, 500);
-                                    const truncated = event.toolResult.content.length > 500 ? '...' : '';
-                                    toolCard += `
-    <div class="tool-output">
-        <div class="tool-output-header">输出:</div>
-        <pre class="tool-output-content">${this.escapeHtml(preview)}${truncated}</pre>
-    </div>`;
-                                }
-
-                                toolCard += `</div>`;
-
-                                aiMessage.content = aiMessage.content.replace(executingCardRegex, toolCard);
-                                toolStatus.delete(event.toolCall.id);
-                            }
-                            this.shouldScrollToBottom = true;
-                            break;
-
-                        case 'tool_error':
-                            // 工具错误 - 更新工具卡片为错误状态
-                            if (event.toolCall) {
-                                const name = toolStatus.get(event.toolCall.id)?.name || event.toolCall.name || 'unknown';
-                                const errorMsg = event.toolResult?.content || 'Unknown error';
-
-                                const executingCardRegex = new RegExp(
-                                    `<div class="tool-call-card tool-executing">\\s*<div class="tool-header">\\s*<span class="tool-icon">🔧</span>\\s*<span class="tool-name">${name}</span>[^]*?</div>\\s*</div>`,
-                                    'g'
-                                );
-
-                                const errorCard = `
-<div class="tool-call-card tool-error">
-    <div class="tool-header">
-        <span class="tool-icon">❌</span>
-        <span class="tool-name">${name}</span>
-        <span class="tool-status">失败</span>
-    </div>
-    <div class="tool-output tool-error-message">
-        <pre class="tool-output-content">${this.escapeHtml(errorMsg)}</pre>
-    </div>
-</div>`;
-
-                                aiMessage.content = aiMessage.content.replace(executingCardRegex, errorCard);
-                                toolStatus.delete(event.toolCall.id);
-                            }
-                            this.shouldScrollToBottom = true;
-                            break;
-
-                        case 'round_start':
-                            // 新一轮开始
-                            if (event.round && event.round > 1) {
-                                aiMessage.content += '\n\n---\n\n';
-                            }
-                            break;
-
-                        case 'round_end':
-                            // 一轮结束
-                            break;
-
-                        case 'agent_complete':
-                            // Agent 循环完成 - 显示终止原因
-                            this.logger.info('Agent completed', {
-                                reason: event.reason,
-                                totalRounds: event.totalRounds
-                            });
-
-                            // 终止原因映射
-                            const reasonText: Record<string, { icon: string; label: string }> = {
-                                'task_complete': { icon: '✅', label: '任务完成' },
-                                'no_tools': { icon: '✅', label: '已执行完成' },
-                                'summarizing': { icon: '✅', label: '总结完成' },
-                                'repeated_tool': { icon: '⚠️', label: '检测到重复操作' },
-                                'high_failure_rate': { icon: '⚠️', label: '多次调用失败' },
-                                'timeout': { icon: '⏱️', label: '执行超时' },
-                                'max_rounds': { icon: '⚠️', label: '达到最大轮数' },
-                                'user_cancel': { icon: '🛑', label: '用户取消' }
-                            };
-
-                            const reasonInfo = reasonText[event.reason || ''] || { icon: '📌', label: '完成' };
-                            const roundsText = event.totalRounds ? ` (${event.totalRounds} 轮)` : '';
-
-                            // 添加终止信息
-                            aiMessage.content += `\n\n---\n**${reasonInfo.icon} ${reasonInfo.label}**${roundsText}`;
-
-                            // 如果有终止消息，添加到内容中
-                            if (event.terminationMessage) {
-                                aiMessage.content += `\n${event.terminationMessage}`;
-                            }
-
-                            this.shouldScrollToBottom = true;
-                            break;
-
-                        case 'error':
-                            // 错误
-                            aiMessage.content += `\n\n❌ 错误: ${event.error}`;
-                            this.shouldScrollToBottom = true;
-                            break;
-                    }
-                },
-                error: (error) => {
-                    this.logger.error('Agent stream error', error);
-                    aiMessage.content += `\n\n❌ 错误: ${error instanceof Error ? error.message : 'Unknown error'}`;
-                    this.isLoading = false;
-                    this.shouldScrollToBottom = true;
-                    this.saveChatHistory();
-                },
-                complete: () => {
-                    this.isLoading = false;
-                    this.updateTokenUsage();
-                    this.saveChatHistory();
-                    this.shouldScrollToBottom = true;
-                }
+                next: (event: AnyUIStreamEvent) => this.renderUIEvent(event, aiMessage),
+                error: (error) => this.handleStreamError(error, aiMessage),
+                complete: () => this.handleStreamComplete(aiMessage)
             });
 
         } catch (error) {
@@ -663,6 +564,99 @@ export class AiSidebarComponent implements OnInit, OnDestroy, AfterViewChecked, 
             this.updateTokenUsage();
             setTimeout(() => this.scrollToBottom(), 0);
         }
+    }
+
+    /**
+     * 渲染 UI 事件 - 纯渲染逻辑，无业务处理
+     * 核心：所有内容已过滤/转义，可直接使用
+     */
+    private renderUIEvent(event: AnyUIStreamEvent, message: ChatMessage): void {
+        if (!message.uiBlocks) {
+            message.uiBlocks = [];
+        }
+
+        switch (event.type) {
+            case 'text':
+                // 直接追加文本
+                message.content += event.content;
+                break;
+
+            case 'tool_start':
+                // 添加工具块（执行中状态）
+                message.uiBlocks.push({
+                    type: 'tool',
+                    id: event.toolId,
+                    name: event.toolDisplayName,
+                    icon: event.toolIcon,
+                    status: 'executing'
+                });
+                break;
+
+            case 'tool_complete':
+                // 更新工具块为完成状态
+                const block = message.uiBlocks.find(b => b.id === event.toolId);
+                if (block) {
+                    block.status = event.success ? 'success' : 'error';
+                    block.duration = event.duration;
+                    block.output = event.output;  // 已格式化，直接使用
+                }
+                break;
+
+            case 'tool_error':
+                // 更新工具块为错误状态
+                const errorBlock = message.uiBlocks.find(b => b.id === event.toolId);
+                if (errorBlock) {
+                    errorBlock.status = 'error';
+                    errorBlock.errorMessage = event.errorMessage;
+                }
+                break;
+
+            case 'round_divider':
+                // 添加分隔线块
+                message.uiBlocks.push({
+                    type: 'divider',
+                    round: event.roundNumber
+                });
+                break;
+
+            case 'agent_done':
+                // 添加状态块
+                message.uiBlocks.push({
+                    type: 'status',
+                    icon: event.reasonIcon,
+                    text: event.reasonText,
+                    rounds: event.totalRounds
+                });
+                break;
+
+            case 'error':
+                message.content += `\n\n❌ 错误: ${event.error}`;
+                break;
+        }
+
+        this.shouldScrollToBottom = true;
+    }
+
+    /**
+     * 处理流错误
+     */
+    private handleStreamError(error: any, message: ChatMessage): void {
+        this.logger.error('Agent stream error', error);
+        message.content += `\n\n❌ 错误: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        this.isLoading = false;
+        this.shouldScrollToBottom = true;
+        this.updateTokenUsage();
+        this.saveChatHistory();
+    }
+
+    /**
+     * 处理流完成
+     */
+    private handleStreamComplete(message: ChatMessage): void {
+        this.isLoading = false;
+        this.updateTokenUsage();
+        this.saveChatHistory();
+        this.shouldScrollToBottom = true;
     }
 
     /**

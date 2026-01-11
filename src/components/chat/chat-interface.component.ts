@@ -8,6 +8,8 @@ import { LoggerService } from '../../services/core/logger.service';
 import { ChatHistoryService } from '../../services/chat/chat-history.service';
 import { NgbModal } from '@ng-bootstrap/ng-bootstrap';
 import { TranslateService } from '../../i18n';
+import { ToolStreamProcessorService } from '../../services/tools/tool-stream-processor.service';
+import { AnyUIStreamEvent } from '../../services/tools/types/ui-stream-event.types';
 
 @Component({
     selector: 'app-chat-interface',
@@ -45,7 +47,8 @@ export class ChatInterfaceComponent implements OnInit, OnDestroy, AfterViewCheck
         private logger: LoggerService,
         private modal: NgbModal,
         private chatHistory: ChatHistoryService,
-        private translate: TranslateService
+        private translate: TranslateService,
+        private toolStreamProcessor: ToolStreamProcessorService
     ) {
         this.t = this.translate.t;
     }
@@ -192,6 +195,7 @@ export class ChatInterfaceComponent implements OnInit, OnDestroy, AfterViewCheck
 
     /**
      * 处理发送消息（使用 Agent 循环模式）
+     * 使用 ToolStreamProcessorService 处理所有工具事件
      */
     async onSendMessageWithAgent(content: string): Promise<void> {
         if (!content.trim() || this.isLoading) {
@@ -220,18 +224,16 @@ export class ChatInterfaceComponent implements OnInit, OnDestroy, AfterViewCheck
         const aiMessage: ChatMessage = {
             id: this.generateId(),
             role: MessageRole.ASSISTANT,
-            content: '',  // 初始为空
+            content: '',
+            uiBlocks: [],
             timestamp: new Date()
         };
         this.messages.push(aiMessage);
 
-        // 工具调用状态跟踪
-        const toolStatus = new Map<string, { name: string; startTime: number }>();
-
         try {
-            // 使用 Agent 循环流式 API
-            this.aiService.chatStreamWithAgentLoop({
-                messages: this.messages.slice(0, -1),  // 排除刚添加的空 AI 消息
+            // 使用 ToolStreamProcessorService 处理流式事件
+            this.toolStreamProcessor.startAgentStream({
+                messages: this.messages.slice(0, -1),
                 maxTokens: 2000,
                 temperature: 0.7
             }, {
@@ -239,108 +241,9 @@ export class ChatInterfaceComponent implements OnInit, OnDestroy, AfterViewCheck
             }).pipe(
                 takeUntil(this.destroy$)
             ).subscribe({
-                next: (event: AgentStreamEvent) => {
-                    switch (event.type) {
-                        case 'text_delta':
-                            // 流式显示文本
-                            if (event.textDelta) {
-                                aiMessage.content += event.textDelta;
-                                this.shouldScrollToBottom = true;
-                            }
-                            break;
-
-                        case 'tool_use_start':
-                            // 显示工具开始
-                            const toolName = event.toolCall?.name || 'unknown';
-                            aiMessage.content += `\n\n🔧 ${this.t.chatInterface.executingTool} ${toolName}...`;
-                            if (event.toolCall?.id) {
-                                toolStatus.set(event.toolCall.id, {
-                                    name: toolName,
-                                    startTime: Date.now()
-                                });
-                            }
-                            this.shouldScrollToBottom = true;
-                            break;
-
-                        case 'tool_executing':
-                            // 工具正在执行（额外状态）
-                            break;
-
-                        case 'tool_executed':
-                            // 工具执行完成 - 更新状态
-                            if (event.toolCall && event.toolResult) {
-                                const name = toolStatus.get(event.toolCall.id)?.name || event.toolCall.name || 'unknown';
-                                const duration = event.toolResult.duration || 0;
-
-                                // 替换等待提示为完成状态
-                                aiMessage.content = aiMessage.content.replace(
-                                    new RegExp(`🔧 ${this.t.chatInterface.executingTool} ${name}\\.\\.\\.`),
-                                    `✅ ${name} (${duration}ms)`
-                                );
-
-                                // 显示工具输出预览
-                                if (event.toolResult.content && !event.toolResult.is_error) {
-                                    const preview = event.toolResult.content.substring(0, 500);
-                                    const truncated = event.toolResult.content.length > 500 ? '...' : '';
-                                    aiMessage.content += `\n\n📋 **${this.t.chatInterface.toolOutput}**:\n\`\`\`\n${preview}${truncated}\n\`\`\``;
-                                }
-
-                                toolStatus.delete(event.toolCall.id);
-                            }
-                            this.shouldScrollToBottom = true;
-                            break;
-
-                        case 'tool_error':
-                            // 工具执行失败
-                            if (event.toolCall) {
-                                const name = toolStatus.get(event.toolCall.id)?.name || event.toolCall.name || 'unknown';
-                                aiMessage.content = aiMessage.content.replace(
-                                    new RegExp(`🔧 ${this.t.chatInterface.executingTool} ${name}\\.\\.\\.`),
-                                    `❌ ${name} ${this.t.chatInterface.toolFailed}: ${event.toolResult?.content || 'Unknown error'}`
-                                );
-                                toolStatus.delete(event.toolCall.id);
-                            }
-                            this.shouldScrollToBottom = true;
-                            break;
-
-                        case 'round_start':
-                            // 新一轮开始
-                            if (event.round && event.round > 1) {
-                                aiMessage.content += '\n\n---\n\n';
-                            }
-                            break;
-
-                        case 'round_end':
-                            // 一轮结束
-                            break;
-
-                        case 'agent_complete':
-                            // Agent 循环完成
-                            this.logger.info('Agent completed', {
-                                reason: event.reason,
-                                totalRounds: event.totalRounds
-                            });
-                            break;
-
-                        case 'error':
-                            // 错误
-                            aiMessage.content += `\n\n❌ ${this.t.chatInterface.errorPrefix}: ${event.error}`;
-                            this.shouldScrollToBottom = true;
-                            break;
-                    }
-                },
-                error: (error) => {
-                    this.logger.error('Agent stream error', error);
-                    aiMessage.content += `\n\n❌ ${this.t.chatInterface.errorPrefix}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-                    this.isLoading = false;
-                    this.shouldScrollToBottom = true;
-                    this.saveChatHistory();
-                },
-                complete: () => {
-                    this.isLoading = false;
-                    this.saveChatHistory();
-                    this.shouldScrollToBottom = true;
-                }
+                next: (event: AnyUIStreamEvent) => this.renderUIEvent(event, aiMessage),
+                error: (error) => this.handleStreamError(error, aiMessage),
+                complete: () => this.handleStreamComplete(aiMessage)
             });
 
         } catch (error) {
@@ -349,6 +252,90 @@ export class ChatInterfaceComponent implements OnInit, OnDestroy, AfterViewCheck
             this.isLoading = false;
             setTimeout(() => this.scrollToBottom(), 0);
         }
+    }
+
+    /**
+     * 渲染 UI 事件 - 纯渲染逻辑
+     */
+    private renderUIEvent(event: AnyUIStreamEvent, message: ChatMessage): void {
+        if (!message.uiBlocks) {
+            message.uiBlocks = [];
+        }
+
+        switch (event.type) {
+            case 'text':
+                message.content += event.content;
+                break;
+
+            case 'tool_start':
+                message.uiBlocks.push({
+                    type: 'tool',
+                    id: event.toolId,
+                    name: event.toolDisplayName,
+                    icon: event.toolIcon,
+                    status: 'executing'
+                });
+                break;
+
+            case 'tool_complete':
+                const block = message.uiBlocks.find(b => b.id === event.toolId);
+                if (block) {
+                    block.status = event.success ? 'success' : 'error';
+                    block.duration = event.duration;
+                    block.output = event.output;
+                }
+                break;
+
+            case 'tool_error':
+                const errorBlock = message.uiBlocks.find(b => b.id === event.toolId);
+                if (errorBlock) {
+                    errorBlock.status = 'error';
+                    errorBlock.errorMessage = event.errorMessage;
+                }
+                break;
+
+            case 'round_divider':
+                message.uiBlocks.push({
+                    type: 'divider',
+                    round: event.roundNumber
+                });
+                break;
+
+            case 'agent_done':
+                message.uiBlocks.push({
+                    type: 'status',
+                    icon: event.reasonIcon,
+                    text: event.reasonText,
+                    rounds: event.totalRounds
+                });
+                break;
+
+            case 'error':
+                message.content += `\n\n❌ ${this.t.chatInterface.errorPrefix}: ${event.error}`;
+                break;
+        }
+
+        this.shouldScrollToBottom = true;
+    }
+
+    /**
+     * 处理流错误
+     */
+    private handleStreamError(error: any, message: ChatMessage): void {
+        this.logger.error('Agent stream error', error);
+        message.content += `\n\n❌ ${this.t.chatInterface.errorPrefix}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        this.isLoading = false;
+        this.shouldScrollToBottom = true;
+        this.saveChatHistory();
+    }
+
+    /**
+     * 处理流完成
+     */
+    private handleStreamComplete(message: ChatMessage): void {
+        this.isLoading = false;
+        this.saveChatHistory();
+        this.shouldScrollToBottom = true;
     }
 
     /**
@@ -382,13 +369,13 @@ export class ChatInterfaceComponent implements OnInit, OnDestroy, AfterViewCheck
             id: this.generateId(),
             role: MessageRole.ASSISTANT,
             content: '',  // 初始为空
+            uiBlocks: [],
             timestamp: new Date()
         };
         this.messages.push(aiMessage);
 
         // 工具调用状态跟踪
         let pendingToolCalls: Map<string, { name: string; startTime: number }> = new Map();
-        let toolResultsToAppend: string[] = [];
 
         try {
             // 使用流式 API
@@ -452,7 +439,7 @@ export class ChatInterfaceComponent implements OnInit, OnDestroy, AfterViewCheck
 
                         // 格式化工具结果
                         const formattedResult = `\n\n${icon} ${header}:\n\`\`\`\n${resultPreview}\n\`\`\``;
-                        toolResultsToAppend.push(formattedResult);
+                        aiMessage.content += formattedResult;
                         this.shouldScrollToBottom = true;
                     }
                     // 工具错误
@@ -463,15 +450,9 @@ export class ChatInterfaceComponent implements OnInit, OnDestroy, AfterViewCheck
                         );
                         this.shouldScrollToBottom = true;
                     }
-                    // 消息结束 - 附加所有工具结果
+                    // 消息结束
                     else if (event.type === 'message_end') {
                         this.logger.info('Stream completed');
-
-                        // 附加所有工具结果
-                        if (toolResultsToAppend.length > 0) {
-                            aiMessage.content += toolResultsToAppend.join('');
-                        }
-
                         this.playNotificationSound();
                         this.shouldScrollToBottom = true;
                     }

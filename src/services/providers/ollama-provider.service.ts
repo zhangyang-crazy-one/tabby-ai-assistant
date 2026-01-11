@@ -43,7 +43,8 @@ export class OllamaProviderService extends BaseAiProvider {
                     messages: this.transformMessages(request.messages),
                     max_tokens: request.maxTokens || 1000,
                     temperature: request.temperature || 0.7,
-                    stream: false
+                    stream: false,
+                    ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {})
                 })
             });
 
@@ -92,7 +93,8 @@ export class OllamaProviderService extends BaseAiProvider {
                             messages: this.transformMessages(request.messages),
                             max_tokens: request.maxTokens || 1000,
                             temperature: request.temperature || 0.7,
-                            stream: true
+                            stream: true,
+                            ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {})
                         }),
                         signal: abortController.signal
                     });
@@ -363,12 +365,64 @@ export class OllamaProviderService extends BaseAiProvider {
     }
 
     /**
-     * 转换消息格式
+     * 转换消息格式 - OpenAI 兼容格式
+     * 支持 tool 角色和 assistant 的 tool_calls
      */
     protected transformMessages(messages: any[]): any[] {
-        return messages.map(msg => ({
-            role: msg.role === 'user' ? 'user' : 'assistant',
-            content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
-        }));
+        const result: any[] = [];
+
+        for (const msg of messages) {
+            // 处理工具结果消息
+            if (msg.role === 'tool' || msg.toolResults) {
+                if (msg.toolResults && msg.toolResults.length > 0) {
+                    for (const tr of msg.toolResults) {
+                        if (tr.tool_use_id) {
+                            result.push({
+                                role: 'tool',
+                                tool_call_id: tr.tool_use_id,
+                                content: String(tr.content || '')
+                            });
+                        }
+                    }
+                } else if (msg.tool_use_id) {
+                    result.push({
+                        role: 'tool',
+                        tool_call_id: msg.tool_use_id,
+                        content: String(msg.content || '')
+                    });
+                }
+                continue;
+            }
+
+            // 处理 Assistant 消息
+            if (msg.role === 'assistant') {
+                const assistantMsg: any = {
+                    role: 'assistant',
+                    content: String(msg.content || '')
+                };
+
+                if (msg.toolCalls && msg.toolCalls.length > 0) {
+                    assistantMsg.tool_calls = msg.toolCalls.map((tc: any) => ({
+                        id: tc.id,
+                        type: 'function',
+                        function: {
+                            name: tc.name,
+                            arguments: JSON.stringify(tc.input || {})
+                        }
+                    }));
+                }
+
+                result.push(assistantMsg);
+                continue;
+            }
+
+            // 用户消息
+            result.push({
+                role: msg.role === 'user' ? 'user' : 'assistant',
+                content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
+            });
+        }
+
+        return result;
     }
 }

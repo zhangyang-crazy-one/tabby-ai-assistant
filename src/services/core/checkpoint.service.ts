@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import * as pako from 'pako';
 import { LoggerService } from './logger.service';
+import { FileStorageService } from './file-storage.service';
 import { ChatHistoryService } from '../chat/chat-history.service';
 import { Checkpoint, ApiMessage } from '../../types/ai.types';
 
@@ -84,9 +85,13 @@ export class CheckpointManager {
     private totalCompressedSize = 0;
     private compressionCount = 0;
 
+    /** 文件存储键名 */
+    private readonly STORAGE_FILENAME = 'checkpoints';
+
     constructor(
         private logger: LoggerService,
-        private chatHistoryService: ChatHistoryService
+        private chatHistoryService: ChatHistoryService,
+        private fileStorage: FileStorageService
     ) {
         this.loadCheckpoints();
         this.logger.info('CheckpointManager initialized');
@@ -762,8 +767,18 @@ export class CheckpointManager {
 
     private saveCheckpoint(checkpoint: Checkpoint): void {
         try {
-            const key = `checkpoint_${checkpoint.id}`;
-            localStorage.setItem(key, JSON.stringify(checkpoint));
+            // 获取现有检查点列表，添加新检查点
+            const checkpoints = this.fileStorage.load<Checkpoint[]>(this.STORAGE_FILENAME, []);
+            const existingIndex = checkpoints.findIndex(cp => cp.id === checkpoint.id);
+
+            if (existingIndex >= 0) {
+                checkpoints[existingIndex] = checkpoint;
+            } else {
+                checkpoints.push(checkpoint);
+            }
+
+            // 保存到文件
+            this.fileStorage.save(this.STORAGE_FILENAME, checkpoints);
         } catch (error) {
             this.logger.error('Failed to save checkpoint', error);
         }
@@ -771,8 +786,9 @@ export class CheckpointManager {
 
     private removeFromStorage(checkpointId: string): void {
         try {
-            const key = `checkpoint_${checkpointId}`;
-            localStorage.removeItem(key);
+            const checkpoints = this.fileStorage.load<Checkpoint[]>(this.STORAGE_FILENAME, []);
+            const filteredCheckpoints = checkpoints.filter(cp => cp.id !== checkpointId);
+            this.fileStorage.save(this.STORAGE_FILENAME, filteredCheckpoints);
         } catch (error) {
             this.logger.error('Failed to remove checkpoint from storage', error);
         }
@@ -791,26 +807,15 @@ export class CheckpointManager {
 
     private loadCheckpoints(): void {
         try {
-            // 从 localStorage 加载所有检查点
-            const checkpoints: Checkpoint[] = [];
+            // 从文件存储加载检查点
+            const checkpoints = this.fileStorage.load<Checkpoint[]>(this.STORAGE_FILENAME, []);
 
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith('checkpoint_')) {
-                    try {
-                        const checkpoint = JSON.parse(localStorage.getItem(key)!);
-                        checkpoints.push(checkpoint);
-                    } catch (error) {
-                        this.logger.warn('Failed to parse checkpoint', { key, error });
-                    }
-                }
+            if (checkpoints.length > 0) {
+                this.checkpointsSubject.next(checkpoints);
+                this.logger.info('Loaded checkpoints from file storage', {
+                    count: checkpoints.length
+                });
             }
-
-            this.checkpointsSubject.next(checkpoints);
-
-            this.logger.info('Loaded checkpoints from storage', {
-                count: checkpoints.length
-            });
         } catch (error) {
             this.logger.error('Failed to load checkpoints', error);
             this.checkpointsSubject.next([]);

@@ -11,6 +11,7 @@
 - **错误修复** - 自动分析错误并提供修复建议
 - **终端感知** - 实时感知终端状态
 - **智能 Agent 工具调用循环** - 支持多轮工具自动调用，智能终止检测
+- **MCP 服务器支持** - 通过 Model Context Protocol 扩展 AI 工具能力
 
 ### 安全特性
 - **多级风险评估** - 自动识别危险命令（低/中/高/极风险）
@@ -24,6 +25,7 @@
 - **热键支持** - 自定义快捷键 + 智能感知终端上下文
 - **主题支持** - 5种主题：跟随系统、浅色、深色、像素复古、赛博科技、羊皮卷
 - **上下文菜单** - 右键快速操作
+- **数据管理** - 文件存储、导入导出、迁移工具
 
 ## 🚀 支持的AI提供商
 
@@ -43,6 +45,83 @@
 | **Ollama** | `http://localhost:11434/v1` | llama3.1 | 本地运行，无需API密钥 |
 | **vLLM** | `http://localhost:8000/v1` | Llama-3.1-8B | 高性能推理框架 |
 | **OpenAI Compatible** | `http://localhost:11434/v1` | gpt-3.5-turbo | 兼容LocalAI等 |
+
+## 🔌 MCP 服务器支持
+
+### 什么是 MCP？
+
+MCP (Model Context Protocol) 是 Anthropic 提出的开放协议，允许 AI 模型与外部工具和服务进行通信。通过 MCP 服务器，您可以扩展 AI 助手的能力，使其能够访问更多工具和数据源。
+
+### 支持的传输类型
+
+| 传输类型 | 适用场景 | 配置项 |
+|----------|---------|--------|
+| **Stdio** | 本地进程 | command, args, env, cwd |
+| **SSE** | 远程服务器 | url, headers |
+| **HTTP** | HTTP 服务 | url, headers, session 管理 |
+
+### 配置 MCP 服务器
+
+1. 打开 Tabby 设置 → AI助手 → **MCP服务器** 标签
+2. 点击 **添加服务器** 按钮
+3. 选择传输类型并填写配置：
+   - **Stdio**: 输入命令、参数、环境变量和工作目录
+   - **SSE/HTTP**: 输入服务器 URL 和请求头
+4. 启用 **自动连接** 选项，服务器将在启动时自动连接
+5. 点击 **连接** 按钮测试连接
+
+### 示例：添加一个本地 MCP 服务器
+
+```json
+{
+    "name": "filesystem",
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/dir"],
+    "env": {},
+    "cwd": "/home/user",
+    "enabled": true,
+    "autoConnect": true
+}
+```
+
+### 可用的 MCP 工具
+
+连接 MCP 服务器后，AI 助手将自动发现并使用服务器提供的工具。工具名称格式为 `mcp_{serverId}_{toolName}`。
+
+### 高级功能
+
+#### 超时管理
+每个 MCP 服务器可以配置请求超时时间：
+```json
+{
+    "name": "myserver",
+    "timeout": 60000,
+    ...
+}
+```
+- **默认超时**: 30 秒
+- **范围**: 1 秒 ~ 5 分钟
+
+#### 自动重试
+工具调用失败时自动重试：
+- **最大重试次数**: 3 次
+- **重试延迟**: 递增延迟（1s → 2s → 3s）
+- **日志记录**: 每次重试都有日志输出
+
+#### 调用日志
+系统记录所有工具调用历史：
+- **保留数量**: 最多 1000 条
+- **记录内容**: clientId, toolName, arguments, result, success, duration, timestamp
+- **统计信息**: 支持查询调用统计（总数/成功/失败/平均耗时）
+
+### 故障排除
+
+| 问题 | 解决方案 |
+|------|----------|
+| 连接超时 | 增加 `timeout` 配置值 |
+| 工具调用失败 | 检查服务器日志，启用重试机制 |
+| 频繁断开 | 确认服务器 URL 或 command 配置正确 |
 
 ## 📦 安装
 
@@ -155,6 +234,35 @@ npm run build
 3. **密码验证**: 极高风险命令需要密码
 4. **同意持久化**: 记住用户的选择（30天）
 
+## 📁 数据管理
+
+### 文件存储
+插件数据存储在用户可访问的目录中：
+- **Windows**: `%APPDATA%\tabby\plugins\tabby-ai-assistant\data`
+- **Linux/macOS**: `$HOME/.config/tabby/plugins/tabby-ai-assistant/data`
+
+### 存储文件
+| 文件 | 说明 |
+|------|------|
+| `memories.json` | AI记忆数据（短期/中期/长期） |
+| `chat-sessions.json` | 聊天会话历史 |
+| `checkpoints.json` | 上下文检查点 |
+| `config.json` | 插件配置 |
+| `consents.json` | 用户授权记录 |
+| `password.json` | 密码哈希 |
+| `context-config.json` | 上下文配置 |
+| `auto-compact.json` | 自动压缩设置 |
+
+### 功能
+- **查看数据目录**: 在设置中打开数据存储目录
+- **导出所有数据**: 将所有数据导出为JSON备份文件
+- **导入数据**: 从备份文件恢复数据
+- **迁移数据**: 从浏览器localStorage迁移到文件存储
+- **清除数据**: 一键清除所有存储数据
+
+### 迁移说明
+从旧版本升级后，系统会检测浏览器存储中的旧数据，并提示是否迁移到新的文件存储系统。
+
 ## 🏗️ 项目架构
 
 ### 技术栈
@@ -192,12 +300,23 @@ tabby-ai-assistant/
 │   │   │   └── vllm-provider.service.ts
 │   │   ├── security/                 # 安全服务
 │   │   │   └── risk-assessment.service.ts
+│   │   ├── mcp/                      # MCP 协议实现
+│   │   │   ├── mcp-message.types.ts       # MCP 消息类型定义
+│   │   │   ├── mcp-client-manager.service.ts  # MCP 客户端管理器
+│   │   │   └── transports/                # 传输层实现
+│   │   │       ├── base-transport.ts      # 传输基类
+│   │   │       ├── stdio-transport.ts     # Stdio 传输
+│   │   │       ├── sse-transport.ts       # SSE 传输
+│   │   │       └── http-transport.ts      # HTTP 传输
 │   │   └── terminal/                 # 终端服务
 │   │       └── terminal-context.service.ts
 │   ├── components/                   # UI组件
 │   │   ├── ai-sidebar.component.ts
 │   │   ├── chat/                     # 聊天组件
-│   │   └── settings/                 # 设置组件
+│   │   ├── settings/                 # 设置组件（含 mcp-settings）
+│   │   ├── security/                 # 安全组件
+│   │   ├── terminal/                 # 终端组件
+│   │   └── common/                   # 公共组件
 │   └── styles/                       # 样式文件
 │       └── ai-assistant.scss
 ├── webpack.config.js                 # Webpack配置
@@ -240,6 +359,95 @@ npm run clean      # 清理构建文件
 4. 在 `ai-provider-manager.service.ts` 注册提供商
 
 ### 重构记录
+
+- **v1.0.30**: 可配置的 Agent 最大轮数 (Fix #1)
+  - **问题修复**: Issue #1 "达到最大轮次30轮" - 用户无法自定义最大轮数限制
+  - **新增配置**: `agentMaxRounds` 配置项（默认 50，范围 10-200）
+  - **新增 UI**: 在「聊天设置 → 聊天行为」中添加可视化配置界面
+  - **代码优化**: `ai-sidebar.component.ts` 从配置读取 `maxRounds`，替代硬编码值
+  - **增强检测**: 扩展 INCOMPLETE_PATTERNS 和 SUMMARY_PATTERNS 正则模式
+  - **新增 i18n**: agentMaxRounds 设置支持中/英/日三语
+
+- **v1.0.28**: Minimax Provider 工具调用深度修复
+  - **问题修复**: 工具调用事件丢失，AI 输出 `<invoke>` 等 XML 格式
+  - **核心修复 1**: 重构 `transformMessages` 使用 Anthropic tool_use/tool_result 格式
+  - **核心修复 2**: 增强 `buildToolResultMessage` 添加 toolResults 字段
+  - **核心修复 3**: 保留 toolCalls 到消息对象供下一轮转换
+  - **核心修复 4**: 精简 `buildAgentSystemPrompt` 防止 AI 模仿 XML
+  - **类型扩展**: ChatMessage 添加 toolCalls、toolResults、tool_use_id 字段
+
+- **v1.0.27**: 正则匹配全面优化
+  - **问题修复**: Agent 在第 5 轮因 "no_tools" 误终止
+  - **问题原因**: "现在重新查询" 等模式未被 INCOMPLETE_PATTERNS 覆盖
+  - **功能增强**: INCOMPLETE_PATTERNS 从 ~40 模式增加到 ~120+ 模式
+  - **新增中文模式**: 重新、继续、再次、再试、尝试、检查、查一下等
+  - **新增英文模式**: again、retry、try again、let me try、need to try 等
+  - **扩展 SUMMARY_PATTERNS**: wrap up、concluding、finish up 等
+
+- **v1.0.26**: 上下文系统与工具调用集成
+  - **功能增强**: ContextManager 集成到 Agent 循环
+  - **功能增强**: 使用 `getEffectiveHistory()` 获取智能过滤的历史消息
+  - **功能增强**: Agent 系统提示添加 ReAct 框架（Thought → Action → Observation）
+  - **功能增强**: 强调 `task_complete` 工具为唯一任务完成方式
+  - **优化**: maxRounds 从 5 增加到 30，支持复杂任务
+  - **新增方法**: `convertToAgentMessage()` - ApiMessage 转 ChatMessage
+  - **新增**: 历史摘要消息标记 `[历史摘要]`
+
+- **v1.0.25**: 修复 Agent 循环逻辑漏洞
+  - **BUG 修复**: checkTermination 返回 shouldTerminate: false 但仍直接终止
+  - **问题原因**: else 分支忽略 checkTermination 结果直接调用 subscriber.complete()
+  - **修复**: else 分支检查 !termination.shouldTerminate 时继续下一轮
+  - **优化**: 使用 termination.reason 作为终止原因而非硬编码 'no_tools'
+
+- **v1.0.24**: 修复 Agent 重复执行问题
+  - **BUG 修复**: Agent 重复执行之前已完成的操作
+  - **问题原因**: buildAgentMessages 过滤掉所有 ASSISTANT 消息，导致丢失工具执行结果
+  - **修复**: 保留 AI 回复但清洗工具卡片 HTML
+  - **新增方法**: cleanToolCardHtml() - 移除 HTML 保留纯文本结果
+  - **优化**: 历史消息现在包含之前的工具执行结果
+
+- **v1.0.23**: 修复 Agent 提前终止问题
+  - **BUG 修复**: AI 说"让我使用工具"但不调用就终止
+  - **新增功能**: 扩展 INCOMPLETE_PATTERNS 正则（添加 MCP/工具相关模式）
+  - **新增功能**: 添加工具名提及检测 (mentionsToolWithoutCalling)
+  - **新增终止原因**: 'mentioned_tool' - AI 提及工具但未调用
+  - **新增类型**: TerminationReason 枚举新增 'mentioned_tool'
+  - **优化**: buildAgentSystemPrompt 添加"严禁行为"规则
+
+- **v1.0.22**: Agent 历史上下文优化
+  - **BUG 修复**: Agent 直接调取错误记忆而非执行命令
+  - **新增功能**: 历史消息限制 (MAX_AGENT_HISTORY = 10)
+  - **新增功能**: Agent 系统提示强调"必须执行工具"
+  - **优化**: 分离系统消息和对话消息，历史仅保留最近 10 条
+  - **新增方法**: buildAgentMessages(), buildAgentSystemPrompt()
+
+- **v1.0.21**: MCP 可靠性增强
+  - **新增功能**: 请求超时统一管理 (timeout 配置)
+  - **新增功能**: 自动重试机制 (最多3次，递增延迟)
+  - **新增功能**: 工具调用日志记录 (MCPToolCall 历史)
+  - **新增 API**: getToolCallHistory(), getToolCallStats(), clearToolCallHistory()
+  - **新增类型**: MCPToolCallStats 接口
+
+- **v1.0.20**: MCP (Model Context Protocol) 支持
+  - **新增功能**: MCP 协议类型定义 (mcp-message.types.ts)
+  - **新增功能**: 传输层实现 - Stdio、SSE、HTTP 三种传输方式
+  - **新增功能**: MCP 客户端管理器 (MCPClientManager)
+  - **新增功能**: MCP 服务器配置界面 (MCPSettingsComponent)
+  - **新增功能**: 服务器编辑器对话框 (MCPServerDialogComponent)
+  - **新增功能**: 自动发现并调用 MCP 工具
+  - **新增 i18n**: 中/英/日三语 MCP 设置界面
+  - **存储**: MCP 服务器配置存储在 `mcp-servers.json`
+
+- **v1.0.17**: 数据管理增强
+  - **新增功能**: 文件存储服务 (FileStorageService)
+  - **数据迁移**: 从 localStorage 迁移到文件存储
+  - **新增UI**: 数据管理设置页面
+  - **新增功能**: 导出/导入所有数据
+  - **新增功能**: 查看和管理存储文件
+  - **新增功能**: 从浏览器存储迁移数据
+  - **新增i18n**: 数据管理页面支持中/英/日三语
+  - **存储位置**: `%APPDATA%/tabby/plugins/tabby-ai-assistant/data`
+
 - **v1.0.16**: 主题系统增强
   - **BUG 修复**: 修复深色主题与跟随系统视觉效果相同的问题
   - **新增主题**: 羊皮卷（parchment）- 复古纸张质感亮色主题

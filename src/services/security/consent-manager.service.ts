@@ -2,13 +2,18 @@ import { Injectable } from '@angular/core';
 import * as CryptoJS from 'crypto-js';
 import { RiskLevel, StoredConsent } from '../../types/security.types';
 import { LoggerService } from '../core/logger.service';
+import { FileStorageService } from '../core/file-storage.service';
 
 @Injectable({ providedIn: 'root' })
 export class ConsentManagerService {
     private readonly CONSENT_KEY_PREFIX = 'ai-assistant-consent-';
     private readonly DEFAULT_EXPIRY = 30 * 24 * 60 * 60 * 1000; // 30天
+    private readonly STORAGE_FILENAME = 'consents';
 
-    constructor(private logger: LoggerService) {}
+    constructor(
+        private logger: LoggerService,
+        private fileStorage: FileStorageService
+    ) {}
 
     /**
      * 存储用户同意
@@ -21,11 +26,7 @@ export class ConsentManagerService {
             expiry: Date.now() + this.DEFAULT_EXPIRY
         };
 
-        localStorage.setItem(
-            this.CONSENT_KEY_PREFIX + consent.commandHash,
-            JSON.stringify(consent)
-        );
-
+        this.saveConsentToStorage(consent);
         this.logger.debug('User consent stored', { commandHash: consent.commandHash, riskLevel });
     }
 
@@ -34,18 +35,16 @@ export class ConsentManagerService {
      */
     async hasConsent(command: string, riskLevel: RiskLevel): Promise<boolean> {
         const hash = this.hashCommand(command);
-        const stored = localStorage.getItem(this.CONSENT_KEY_PREFIX + hash);
+        const consent = this.getConsentFromStorage(hash);
 
-        if (!stored) {
+        if (!consent) {
             return false;
         }
 
         try {
-            const consent: StoredConsent = JSON.parse(stored);
-
             // 检查是否过期
             if (Date.now() > consent.expiry) {
-                localStorage.removeItem(this.CONSENT_KEY_PREFIX + hash);
+                this.removeConsentFromStorage(hash);
                 this.logger.debug('Expired consent removed', { commandHash: hash });
                 return false;
             }
@@ -259,28 +258,58 @@ export class ConsentManagerService {
         return CryptoJS.SHA256(normalized).toString();
     }
 
+    // ==================== 文件存储辅助方法 ====================
+
+    /**
+     * 获取存储的文件路径
+     */
+    private getStorageKey(consent: StoredConsent): string {
+        return `${this.CONSENT_KEY_PREFIX}${consent.commandHash}`;
+    }
+
+    /**
+     * 保存同意到文件存储
+     */
+    private saveConsentToStorage(consent: StoredConsent): void {
+        const consents = this.loadAllConsentsFromStorage();
+        consents.set(consent.commandHash, consent);
+        this.fileStorage.save(this.STORAGE_FILENAME, Array.from(consents.values()));
+    }
+
+    /**
+     * 从文件存储获取同意
+     */
+    private getConsentFromStorage(commandHash: string): StoredConsent | null {
+        const consents = this.loadAllConsentsFromStorage();
+        return consents.get(commandHash) || null;
+    }
+
+    /**
+     * 从文件存储删除同意
+     */
+    private removeConsentFromStorage(commandHash: string): void {
+        const consents = this.loadAllConsentsFromStorage();
+        consents.delete(commandHash);
+        this.fileStorage.save(this.STORAGE_FILENAME, Array.from(consents.values()));
+    }
+
+    /**
+     * 从文件存储加载所有同意
+     */
+    private loadAllConsentsFromStorage(): Map<string, StoredConsent> {
+        const data = this.fileStorage.load<StoredConsent[]>(this.STORAGE_FILENAME, []);
+        return new Map(data.map(c => [c.commandHash, c]));
+    }
+
     /**
      * 导出同意数据
      */
     exportConsents(): string {
-        const consents: StoredConsent[] = [];
-        const keys = Object.keys(localStorage);
-        const consentKeys = keys.filter(key => key.startsWith(this.CONSENT_KEY_PREFIX));
-
-        consentKeys.forEach(key => {
-            try {
-                const consentStr = localStorage.getItem(key);
-                if (consentStr) {
-                    consents.push(JSON.parse(consentStr));
-                }
-            } catch (error) {
-                // 跳过损坏的数据
-            }
-        });
+        const consents = this.loadAllConsentsFromStorage();
 
         return JSON.stringify({
             exportTime: new Date().toISOString(),
-            consents
+            consents: Array.from(consents.values())
         }, null, 2);
     }
 
@@ -297,24 +326,19 @@ export class ConsentManagerService {
 
                 let imported = 0;
                 let skipped = 0;
+                const now = Date.now();
 
                 parsed.consents.forEach((consent: StoredConsent) => {
                     try {
                         // 检查是否已存在且未过期
-                        const existing = localStorage.getItem(this.CONSENT_KEY_PREFIX + consent.commandHash);
-                        if (existing) {
-                            const existingConsent: StoredConsent = JSON.parse(existing);
-                            if (Date.now() <= existingConsent.expiry) {
-                                skipped++;
-                                return;
-                            }
+                        const existing = this.getConsentFromStorage(consent.commandHash);
+                        if (existing && now <= existing.expiry) {
+                            skipped++;
+                            return;
                         }
 
                         // 导入同意
-                        localStorage.setItem(
-                            this.CONSENT_KEY_PREFIX + consent.commandHash,
-                            JSON.stringify(consent)
-                        );
+                        this.saveConsentToStorage(consent);
                         imported++;
                     } catch (error) {
                         skipped++;

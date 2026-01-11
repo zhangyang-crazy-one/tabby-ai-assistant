@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { LoggerService } from '../core/logger.service';
+import { FileStorageService } from '../core/file-storage.service';
 import { ApiMessage } from '../../types/ai.types';
 import { SummaryService } from './summary.service';
 
@@ -76,9 +77,13 @@ export class Memory {
     // 重要性阈值
     private readonly IMPORTANCE_THRESHOLD = 0.7;
 
+    /** 文件存储键名 */
+    private readonly STORAGE_FILENAME = 'memories';
+
     constructor(
         private logger: LoggerService,
-        private summaryService: SummaryService
+        private summaryService: SummaryService,
+        private fileStorage: FileStorageService
     ) {
         this.logger.info('Memory system initialized');
         this.loadFromStorage();
@@ -474,7 +479,7 @@ export class Memory {
                 midTerm: Array.from(this.midTermMemories.entries()),
                 longTerm: Array.from(this.longTermMemories.entries())
             };
-            localStorage.setItem('tabby-ai-assistant-memories', JSON.stringify(data));
+            this.fileStorage.save(this.STORAGE_FILENAME, data);
         } catch (error) {
             this.logger.error('Failed to save memories to storage', error);
         }
@@ -482,15 +487,22 @@ export class Memory {
 
     private loadFromStorage(): void {
         try {
-            const stored = localStorage.getItem('tabby-ai-assistant-memories');
-            if (stored) {
-                const data = JSON.parse(stored);
+            const data = this.fileStorage.load<{
+                shortTerm: [string, MemoryItem][];
+                midTerm: [string, MemoryItem][];
+                longTerm: [string, MemoryItem][];
+            }>(this.STORAGE_FILENAME, {
+                shortTerm: [],
+                midTerm: [],
+                longTerm: []
+            });
 
+            if (data.shortTerm.length > 0 || data.midTerm.length > 0 || data.longTerm.length > 0) {
                 this.shortTermMemories = new Map(data.shortTerm || []);
                 this.midTermMemories = new Map(data.midTerm || []);
                 this.longTermMemories = new Map(data.longTerm || []);
 
-                this.logger.info('Loaded memories from storage', {
+                this.logger.info('Loaded memories from file storage', {
                     shortTerm: this.shortTermMemories.size,
                     midTerm: this.midTermMemories.size,
                     longTerm: this.longTermMemories.size

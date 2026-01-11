@@ -69,6 +69,8 @@ export class AiSettingsTabComponent implements OnInit, OnDestroy {
             { id: 'context', labelKey: 'settings.contextTab', icon: 'fa fa-database' },
             { id: 'security', labelKey: 'settings.securityTab', icon: 'fa fa-shield' },
             { id: 'chat', labelKey: 'settings.chatTab', icon: 'fa fa-comments' },
+            { id: 'mcp', labelKey: 'settings.mcpTab', icon: 'fa fa-plug' },
+            { id: 'data', labelKey: 'settings.dataTab', icon: 'fa fa-folder-open' },
             { id: 'advanced', labelKey: 'settings.advancedTab', icon: 'fa fa-sliders' }
         ];
     }

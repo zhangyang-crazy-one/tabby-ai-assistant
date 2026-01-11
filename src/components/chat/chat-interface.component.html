@@ -66,9 +66,64 @@
                                     {{ message.content }}
                                 </div>
 
-                                <!-- AI消息 -->
+                                <!-- AI消息 - 支持 uiBlocks 结构化渲染 -->
                                 <div *ngIf="message.role === 'assistant'" class="message-text ai-response">
-                                    <pre>{{ message.content }}</pre>
+                                    <!-- 兼容旧数据 -->
+                                    <ng-container *ngIf="!message.uiBlocks || message.uiBlocks.length === 0">
+                                        <pre>{{ message.content }}</pre>
+                                    </ng-container>
+                                    
+                                    <!-- 新数据：uiBlocks -->
+                                    <ng-container *ngIf="message.uiBlocks && message.uiBlocks.length > 0">
+                                        <ng-container *ngFor="let block of message.uiBlocks">
+                                            
+                                            <!-- 文本块 -->
+                                            <div *ngIf="block.type === 'text'" class="text-block">
+                                                <pre>{{ block.content }}</pre>
+                                            </div>
+
+                                            <!-- 工具块 -->
+                                            <div *ngIf="block.type === 'tool'" 
+                                                 class="tool-card"
+                                                 [ngClass]="{
+                                                     'tool-executing': block.status === 'executing',
+                                                     'tool-success': block.status === 'success',
+                                                     'tool-error': block.status === 'error'
+                                                 }">
+                                                <div class="tool-header">
+                                                    <span class="tool-icon">
+                                                        <ng-container [ngSwitch]="block.status">
+                                                            <ng-container *ngSwitchCase="'executing'">🔧</ng-container>
+                                                            <ng-container *ngSwitchCase="'success'">✅</ng-container>
+                                                            <ng-container *ngSwitchCase="'error'">❌</ng-container>
+                                                            <ng-container *ngSwitchDefault>🔧</ng-container>
+                                                        </ng-container>
+                                                    </span>
+                                                    <span class="tool-name">{{ block.name }}</span>
+                                                    <span class="tool-status" *ngIf="block.status === 'executing'">执行中...</span>
+                                                    <span class="tool-duration" *ngIf="block.status !== 'executing' && block.duration">{{ block.duration }}ms</span>
+                                                </div>
+                                                <div *ngIf="block.output && block.output.content" class="tool-output">
+                                                    <pre>{{ block.output.content }}</pre>
+                                                    <span *ngIf="block.output.truncated" class="truncated-note">...(已截断)</span>
+                                                </div>
+                                                <div *ngIf="block.status === 'error' && block.errorMessage" class="tool-error">
+                                                    <pre>{{ block.errorMessage }}</pre>
+                                                </div>
+                                            </div>
+
+                                            <!-- 分隔线块 -->
+                                            <div *ngIf="block.type === 'divider'" class="round-divider">
+                                                --- 第 {{ block.round }} 轮 ---
+                                            </div>
+
+                                            <!-- 状态块 -->
+                                            <div *ngIf="block.type === 'status'" class="agent-status">
+                                                {{ block.icon }} {{ block.text }}<span *ngIf="block.rounds"> ({{ block.rounds }} 轮)</span>
+                                            </div>
+                                            
+                                        </ng-container>
+                                    </ng-container>
                                 </div>
 
                                 <!-- 系统消息 -->

@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { ChatMessage } from '../../types/ai.types';
 import { LoggerService } from '../core/logger.service';
+import { FileStorageService } from '../core/file-storage.service';
 
 export interface SavedSession {
     sessionId: string;
@@ -30,6 +31,7 @@ export interface SavedSession {
 }
 
 const STORAGE_KEY = 'tabby-ai-assistant-chat-history';
+const STORAGE_FILENAME = 'chat-sessions';
 const MAX_SESSIONS = 50;
 const MAX_MESSAGES_PER_SESSION = 1000;
 
@@ -44,7 +46,10 @@ export class ChatHistoryService {
     private sessionsSubject = new BehaviorSubject<SavedSession[]>([]);
     public sessions$ = this.sessionsSubject.asObservable();
 
-    constructor(private logger: LoggerService) {
+    constructor(
+        private logger: LoggerService,
+        private fileStorage: FileStorageService
+    ) {
         this.loadSessions();
     }
 
@@ -211,15 +216,16 @@ export class ChatHistoryService {
 
     private loadSessions(): void {
         try {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (stored) {
-                const sessions = JSON.parse(stored).map((s: any) => ({
+            const data = this.fileStorage.load<SavedSession[]>(STORAGE_FILENAME, []);
+
+            if (data.length > 0) {
+                const sessions = data.map((s: any) => ({
                     ...s,
                     createdAt: new Date(s.createdAt),
                     updatedAt: new Date(s.updatedAt)
                 }));
                 this.sessionsSubject.next(sessions);
-                this.logger.info('Loaded sessions from storage', { count: sessions.length });
+                this.logger.info('Loaded sessions from file storage', { count: sessions.length });
             }
         } catch (error) {
             this.logger.error('Failed to load sessions from storage', error);
@@ -228,11 +234,7 @@ export class ChatHistoryService {
     }
 
     private saveToStorage(sessions: SavedSession[]): void {
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-        } catch (error) {
-            this.logger.error('Failed to save sessions to storage', error);
-        }
+        this.fileStorage.save(STORAGE_FILENAME, sessions);
     }
 
     private generateSessionTitle(messages: ChatMessage[]): string {

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { TerminalManagerService, TerminalInfo } from './terminal-manager.service';
 import { LoggerService } from '../core/logger.service';
+import { MCPClientManager } from '../mcp/mcp-client-manager.service';
 
 /**
  * 终端工具定义
@@ -231,16 +232,25 @@ export class TerminalToolsService {
 
     constructor(
         private terminalManager: TerminalManagerService,
-        private logger: LoggerService
+        private logger: LoggerService,
+        private mcpManager: MCPClientManager
     ) {
         // 不再需要静态订阅输出，直接从 xterm buffer 动态读取
     }
 
     /**
-     * 获取所有工具定义
+     * 获取所有工具定义（包括 MCP 工具）
      */
     getToolDefinitions(): ToolDefinition[] {
-        return this.tools;
+        // 获取 MCP 工具
+        const mcpTools = this.mcpManager.getAllToolsWithPrefix().map(tool => ({
+            name: tool.name,
+            description: tool.description,
+            input_schema: tool.inputSchema
+        }));
+
+        // 合并内置工具和 MCP 工具
+        return [...this.tools, ...mcpTools];
     }
 
     /**
@@ -293,7 +303,13 @@ export class TerminalToolsService {
                     result = this.focusTerminal(toolCall.input.terminal_index);
                     break;
                 default:
-                    throw new Error(`Unknown tool: ${toolCall.name}`);
+                    // 检查是否是 MCP 工具
+                    if (toolCall.name.startsWith('mcp_')) {
+                        result = await this.mcpManager.executeMCPTool(toolCall.name, toolCall.input);
+                        this.logger.info('MCP tool executed', { name: toolCall.name });
+                    } else {
+                        throw new Error(`Unknown tool: ${toolCall.name}`);
+                    }
             }
 
             this.logger.info('Tool call completed', { name: toolCall.name, resultLength: result.length });

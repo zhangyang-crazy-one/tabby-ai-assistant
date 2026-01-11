@@ -57,9 +57,13 @@ import { PlatformDetectionService } from './services/platform/platform-detection
 // Core Services
 import { CheckpointManager } from './services/core/checkpoint.service';
 import { ToastService } from './services/core/toast.service';
+import { FileStorageService } from './services/core/file-storage.service';
 
 // Enhanced Terminal Services
 import { BufferAnalyzerService } from './services/terminal/buffer-analyzer.service';
+
+// MCP Services
+import { MCPClientManager } from './services/mcp/mcp-client-manager.service';
 
 // Tabby Providers (enabled for proper integration)
 
@@ -75,6 +79,8 @@ import { ProviderConfigComponent } from './components/settings/provider-config.c
 import { SecuritySettingsComponent } from './components/settings/security-settings.component';
 import { GeneralSettingsComponent } from './components/settings/general-settings.component';
 import { ContextSettingsComponent } from './components/settings/context-settings.component';
+import { DataSettingsComponent } from './components/settings/data-settings.component';
+import { MCPSettingsComponent } from './components/settings/mcp-settings.component';
 
 import { RiskConfirmDialogComponent } from './components/security/risk-confirm-dialog.component';
 import { PasswordPromptComponent } from './components/security/password-prompt.component';
@@ -150,8 +156,14 @@ import { AiHotkeyProvider } from './providers/tabby/ai-hotkey.provider';
         // Toast Service
         ToastService,
 
+        // File Storage Service
+        FileStorageService,
+
         // Enhanced Terminal Services
         BufferAnalyzerService,
+
+        // MCP Services
+        MCPClientManager,
 
         // Tabby Integration Providers
         { provide: ToolbarButtonProvider, useClass: AiToolbarButtonProvider, multi: true },
@@ -173,6 +185,8 @@ import { AiHotkeyProvider } from './providers/tabby/ai-hotkey.provider';
         SecuritySettingsComponent,
         GeneralSettingsComponent,
         ContextSettingsComponent,
+        DataSettingsComponent,
+        MCPSettingsComponent,
 
         // Security Components
         RiskConfirmDialogComponent,

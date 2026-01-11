@@ -401,12 +401,74 @@ export class GlmProviderService extends BaseAiProvider {
 
     /**
      * 转换消息格式（Anthropic兼容）
+     * 支持 tool_use 和 tool_result
      */
     protected transformMessages(messages: any[]): any[] {
-        return messages.map(msg => ({
-            role: msg.role,
-            content: [{ type: 'text', text: msg.content }]
-        }));
+        const result: any[] = [];
+
+        for (const msg of messages) {
+            if (msg.role === 'system') continue;
+
+            // 处理工具结果消息
+            if (msg.role === 'tool' || msg.toolResults || msg.tool_use_id) {
+                if (msg.toolResults && msg.toolResults.length > 0) {
+                    const toolResultBlocks = msg.toolResults
+                        .filter((tr: any) => tr.tool_use_id)
+                        .map((tr: any) => ({
+                            type: 'tool_result',
+                            tool_use_id: tr.tool_use_id,
+                            content: String(tr.content || '')
+                        }));
+
+                    if (toolResultBlocks.length > 0) {
+                        result.push({ role: 'user', content: toolResultBlocks });
+                    }
+                } else if (msg.tool_use_id) {
+                    result.push({
+                        role: 'user',
+                        content: [{
+                            type: 'tool_result',
+                            tool_use_id: msg.tool_use_id,
+                            content: String(msg.content || '')
+                        }]
+                    });
+                }
+                continue;
+            }
+
+            // 处理 Assistant 消息
+            if (msg.role === 'assistant') {
+                if (msg.toolCalls && msg.toolCalls.length > 0) {
+                    const contentBlocks: any[] = [];
+                    if (msg.content) {
+                        contentBlocks.push({ type: 'text', text: String(msg.content) });
+                    }
+                    for (const tc of msg.toolCalls) {
+                        contentBlocks.push({
+                            type: 'tool_use',
+                            id: tc.id,
+                            name: tc.name,
+                            input: tc.input || {}
+                        });
+                    }
+                    result.push({ role: 'assistant', content: contentBlocks });
+                } else {
+                    result.push({
+                        role: 'assistant',
+                        content: [{ type: 'text', text: String(msg.content || '') }]
+                    });
+                }
+                continue;
+            }
+
+            // 用户消息
+            result.push({
+                role: 'user',
+                content: [{ type: 'text', text: String(msg.content || '') }]
+            });
+        }
+
+        return result;
     }
 
     /**

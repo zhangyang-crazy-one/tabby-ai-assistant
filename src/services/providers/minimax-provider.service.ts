@@ -343,35 +343,137 @@ export class MinimaxProviderService extends BaseAiProvider {
      * Anthropic API 支持两种格式：
      * 1. 简单字符串: { role: 'user', content: 'Hello' }
      * 2. 内容块数组: { role: 'user', content: [{ type: 'text', text: 'Hello' }] }
-     * 使用简单字符串格式以确保兼容性
+     * 3. 工具结果: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'xxx', content: '...' }] }
+     * 4. 工具调用: { role: 'assistant', content: [{ type: 'tool_use', id: 'xxx', name: 'xxx', input: {...} }] }
+     *
+     * 关键：保持 tool_use/tool_result 结构完整，让 Anthropic API 正确解析工具调用
      */
     protected transformMessages(messages: any[]): any[] {
-        // 过滤掉系统消息（system role 不应该在 messages 数组中）
-        // 保留 user, assistant, tool 角色的消息
-        const filteredMessages = messages.filter(msg =>
-            msg.role === 'user' || msg.role === 'assistant' || msg.role === 'tool'
-        );
+        const result: any[] = [];
 
-        this.logger.info('Transforming messages', {
-            originalCount: messages.length,
-            filteredCount: filteredMessages.length,
-            roles: messages.map(m => m.role)
-        });
+        for (const msg of messages) {
+            // 跳过系统消息（system role 不应该在 messages 数组中）
+            if (msg.role === 'system') continue;
 
-        return filteredMessages.map(msg => {
-            // tool 角色消息转换为 user 角色（Anthropic API 不直接支持 tool 角色）
-            // 但内容保留工具结果标识，让 AI 理解这是工具执行结果
-            if (msg.role === 'tool') {
-                return {
-                    role: 'user',
-                    content: String(msg.content || '')
-                };
+            // 处理工具结果消息 - 使用 Anthropic tool_result 格式
+            // 关键修复：每个 tool_use 必须有对应的 tool_result
+            // 如果 toolResults 有多个，需要为每个生成一个 tool_result block
+            if (msg.role === 'tool' || msg.toolResults || msg.tool_use_id) {
+                // 检查是否有多个工具结果
+                if (msg.toolResults && msg.toolResults.length > 0) {
+                    // 多个工具结果：为每个生成一个 tool_result content block
+                    const toolResultBlocks = msg.toolResults
+                        .filter((tr: any) => tr.tool_use_id)  // 只处理有有效 ID 的结果
+                        .map((tr: any) => ({
+                            type: 'tool_result',
+                            tool_use_id: tr.tool_use_id,
+                            content: String(tr.content || '')
+                        }));
+
+                    if (toolResultBlocks.length > 0) {
+                        result.push({
+                            role: 'user',
+                            content: toolResultBlocks
+                        });
+                        this.logger.debug('Transformed multi-tool results to Anthropic format', {
+                            count: toolResultBlocks.length,
+                            ids: toolResultBlocks.map((b: any) => b.tool_use_id)
+                        });
+                    } else {
+                        // 所有工具结果都没有有效 ID，作为普通消息
+                        this.logger.warn('No valid tool_use_id in toolResults, converting to user message');
+                        result.push({
+                            role: 'user',
+                            content: `[工具执行结果] ${String(msg.content || '')}`
+                        });
+                    }
+                } else {
+                    // 单个工具结果：使用 tool_use_id
+                    const toolUseId = msg.tool_use_id || '';
+                    if (toolUseId) {
+                        result.push({
+                            role: 'user',
+                            content: [{
+                                type: 'tool_result',
+                                tool_use_id: toolUseId,
+                                content: String(msg.content || '')
+                            }]
+                        });
+                        this.logger.debug('Transformed single tool message to Anthropic format', { tool_use_id: toolUseId });
+                    } else {
+                        this.logger.warn('Tool message without valid tool_use_id, converting to user message');
+                        result.push({
+                            role: 'user',
+                            content: `[工具执行结果] ${String(msg.content || '')}`
+                        });
+                    }
+                }
+                continue;
             }
-            return {
-                role: msg.role === 'user' ? 'user' : 'assistant',
+
+            // 处理 Assistant 消息 - 可能包含 tool_use
+            if (msg.role === 'assistant') {
+                // 如果消息中有工具调用记录，构建 content_blocks 数组
+                if (msg.toolCalls && msg.toolCalls.length > 0) {
+                    const contentBlocks: any[] = [];
+
+                    // 添加文本内容（如果有）
+                    if (msg.content) {
+                        contentBlocks.push({ type: 'text', text: String(msg.content) });
+                    }
+
+                    // 添加工具调用块
+                    for (const tc of msg.toolCalls) {
+                        contentBlocks.push({
+                            type: 'tool_use',
+                            id: tc.id,
+                            name: tc.name,
+                            input: tc.input || {}
+                        });
+                    }
+
+                    result.push({ role: 'assistant', content: contentBlocks });
+                    this.logger.debug('Transformed assistant message with tool_calls', { toolCount: msg.toolCalls.length });
+                } else {
+                    // 纯文本响应
+                    result.push({ role: 'assistant', content: String(msg.content || '') });
+                }
+                continue;
+            }
+
+            // 用户消息 - 保持简单字符串格式
+            result.push({
+                role: 'user',
                 content: String(msg.content || '')
-            };
+            });
+        }
+
+        // 详细调试日志 - 显示消息顺序和 ID 匹配情况
+        const debugInfo = result.map((m, i) => {
+            if (Array.isArray(m.content)) {
+                const types = m.content.map((c: any) => {
+                    if (c.type === 'tool_use') return `tool_use(id:${c.id?.slice(-8)})`;
+                    if (c.type === 'tool_result') return `tool_result(id:${c.tool_use_id?.slice(-8)})`;
+                    return c.type;
+                });
+                return `[${i}] ${m.role}: [${types.join(', ')}]`;
+            }
+            return `[${i}] ${m.role}: text(${(m.content as string)?.slice(0, 30)}...)`;
         });
+
+        this.logger.info('Messages transformed', {
+            originalCount: messages.length,
+            transformedCount: result.length,
+            hasToolResults: result.some(m =>
+                Array.isArray(m.content) && m.content.some((c: any) => c.type === 'tool_result')
+            ),
+            hasToolUse: result.some(m =>
+                Array.isArray(m.content) && m.content.some((c: any) => c.type === 'tool_use')
+            ),
+            messageSequence: debugInfo
+        });
+
+        return result;
     }
 
     /**

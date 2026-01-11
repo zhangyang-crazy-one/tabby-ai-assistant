@@ -80,7 +80,8 @@ export class OpenAiProviderService extends BaseAiProvider {
                     messages: this.transformMessages(request.messages),
                     max_tokens: request.maxTokens || 1000,
                     temperature: request.temperature || 0.7,
-                    stream: request.stream || false
+                    stream: request.stream || false,
+                    ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {})
                 });
 
                 this.logResponse(result.data);
@@ -116,7 +117,8 @@ export class OpenAiProviderService extends BaseAiProvider {
                         messages: this.transformMessages(request.messages),
                         max_tokens: request.maxTokens || 1000,
                         temperature: request.temperature || 0.7,
-                        stream: true
+                        stream: true,
+                        ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {})
                     }, {
                         responseType: 'stream'
                     });
@@ -350,11 +352,68 @@ export class OpenAiProviderService extends BaseAiProvider {
         return result;
     }
 
+    /**
+     * 转换消息格式 - OpenAI API 格式
+     * 支持 tool 角色和 assistant 的 tool_calls
+     */
     protected transformMessages(messages: any[]): any[] {
-        return messages.map(msg => ({
-            role: msg.role,
-            content: msg.content
-        }));
+        const result: any[] = [];
+
+        for (const msg of messages) {
+            // 处理工具结果消息 - OpenAI 使用 role: 'tool' + tool_call_id
+            if (msg.role === 'tool' || msg.toolResults) {
+                if (msg.toolResults && msg.toolResults.length > 0) {
+                    // 多个工具结果：每个单独一条消息
+                    for (const tr of msg.toolResults) {
+                        if (tr.tool_use_id) {
+                            result.push({
+                                role: 'tool',
+                                tool_call_id: tr.tool_use_id,
+                                content: String(tr.content || '')
+                            });
+                        }
+                    }
+                } else if (msg.tool_use_id) {
+                    result.push({
+                        role: 'tool',
+                        tool_call_id: msg.tool_use_id,
+                        content: String(msg.content || '')
+                    });
+                }
+                continue;
+            }
+
+            // 处理 Assistant 消息 - 可能包含 tool_calls
+            if (msg.role === 'assistant') {
+                const assistantMsg: any = {
+                    role: 'assistant',
+                    content: msg.content || null
+                };
+
+                // 如果有工具调用，添加 tool_calls 数组
+                if (msg.toolCalls && msg.toolCalls.length > 0) {
+                    assistantMsg.tool_calls = msg.toolCalls.map((tc: any) => ({
+                        id: tc.id,
+                        type: 'function',
+                        function: {
+                            name: tc.name,
+                            arguments: JSON.stringify(tc.input || {})
+                        }
+                    }));
+                }
+
+                result.push(assistantMsg);
+                continue;
+            }
+
+            // 其他消息保持原样
+            result.push({
+                role: msg.role,
+                content: msg.content
+            });
+        }
+
+        return result;
     }
 
     private transformChatResponse(response: any): ChatResponse {
