@@ -89,12 +89,12 @@ import { AnyUIStreamEvent } from '../../services/tools/types/ui-stream-event.typ
                                 </span>
                                 <span class="message-time">{{ formatTimestamp(message.timestamp) }}</span>
                             </div>
-                            
+
                             <!-- 兼容旧数据：如果没有 uiBlocks，显示 content -->
                             <ng-container *ngIf="!message.uiBlocks || message.uiBlocks.length === 0">
                                 <div class="message-text" [innerHTML]="formatMessage(message.content)"></div>
                             </ng-container>
-                            
+
                             <!-- 新数据：遍历 uiBlocks -->
                             <ng-container *ngIf="message.uiBlocks && message.uiBlocks.length > 0">
                                 <ng-container *ngFor="let block of message.uiBlocks">
