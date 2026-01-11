@@ -573,8 +573,18 @@ export class AiSidebarComponent implements OnInit, OnDestroy, AfterViewChecked, 
 
         switch (event.type) {
             case 'text':
-                // 直接追加文本
-                message.content += event.content;
+                // 将文本作为 uiBlock 添加，确保能正确显示
+                // 如果前一个块是文本块，追加到它的内容
+                const lastBlock = message.uiBlocks[message.uiBlocks.length - 1];
+                if (lastBlock && lastBlock.type === 'text') {
+                    lastBlock.content += event.content;
+                } else {
+                    // 创建新的文本块
+                    message.uiBlocks.push({
+                        type: 'text',
+                        content: event.content
+                    });
+                }
                 break;
 
             case 'tool_start':
