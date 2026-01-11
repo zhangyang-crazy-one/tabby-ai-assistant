@@ -153,9 +153,6 @@ import { AnyUIStreamEvent } from '../../services/tools/types/ui-stream-event.typ
                         </div>
                     </div>
                 </div>
-                        <div class="message-text" [innerHTML]="formatMessage(message.content)"></div>
-                    </div>
-                </div>
 
                 <!-- Loading indicator -->
                 <div *ngIf="isLoading" class="message-item assistant loading">
