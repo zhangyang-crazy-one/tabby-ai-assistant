@@ -169,13 +169,26 @@ export class GlmProviderService extends BaseAiProvider {
                     });
 
                     const stream = response.data;
-                    const decoder = new TextDecoder();
                     let buffer = '';
 
                     for await (const chunk of stream) {
                         if (abortController.signal.aborted) break;
 
-                        buffer += decoder.decode(chunk, { stream: true });
+                        // 兼容多种 chunk 类型：string, Buffer, ArrayBuffer, Uint8Array
+                        // 在 Electron/Node.js 环境中，Axios 流可能返回 Buffer 而非 ArrayBuffer
+                        let chunkStr: string;
+                        if (typeof chunk === 'string') {
+                            chunkStr = chunk;
+                        } else if (chunk instanceof Buffer) {
+                            chunkStr = chunk.toString('utf-8');
+                        } else if (chunk instanceof Uint8Array || chunk instanceof ArrayBuffer) {
+                            chunkStr = new TextDecoder().decode(chunk);
+                        } else {
+                            // 兜底处理：尝试转换为字符串
+                            chunkStr = String(chunk);
+                        }
+                        
+                        buffer += chunkStr;
                         const lines = buffer.split('\n');
                         buffer = lines.pop() || '';
 
