@@ -462,3 +462,199 @@
         opacity: 0;
     }
 }
+// ============================================
+// 工具调用卡片样式 - 供 AiSidebarComponent 使用
+// ============================================
+.ai-sidebar-container,
+.ai-chat-interface,
+.ai-assistant {
+    .tool-call-card {
+        margin: 12px 0;
+        border-radius: 8px;
+        border: 1px solid var(--ai-border, #4a4a4a);
+        overflow: hidden;
+        background: var(--ai-bg-tertiary, #3d3d3d);
+
+        .tool-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid var(--ai-border, #4a4a4a);
+
+            .tool-icon {
+                font-size: 14px;
+            }
+
+            .tool-name {
+                font-weight: 600;
+                font-family: 'Courier New', 'Consolas', monospace;
+                color: var(--ai-primary, #4dabf7);
+            }
+
+            .tool-status {
+                font-size: 12px;
+                color: var(--ai-text-secondary, #adb5bd);
+                margin-left: auto;
+            }
+
+            .tool-duration {
+                font-size: 11px;
+                color: var(--ai-text-secondary, #adb5bd);
+                background: rgba(0, 0, 0, 0.3);
+                padding: 2px 6px;
+                border-radius: 4px;
+                margin-left: auto;
+            }
+        }
+
+        .tool-output {
+            padding: 8px 12px;
+
+            .tool-output-header {
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--ai-text-secondary, #adb5bd);
+                margin-bottom: 4px;
+            }
+
+            .tool-output-content {
+                margin: 0;
+                padding: 8px;
+                background: rgba(0, 0, 0, 0.2);
+                border-radius: 4px;
+                font-size: 12px;
+                overflow-x: auto;
+                max-height: 200px;
+                overflow-y: auto;
+                white-space: pre-wrap;
+                word-break: break-word;
+            }
+
+            .tool-output-truncated {
+                font-size: 11px;
+                color: var(--ai-text-secondary, #adb5bd);
+                font-style: italic;
+                margin-top: 4px;
+            }
+        }
+
+        // 执行中状态
+        &.tool-executing {
+            border-color: var(--ai-warning, #fcc419);
+
+            .tool-header {
+                background: rgba(252, 196, 25, 0.15);
+            }
+
+            .tool-status {
+                color: var(--ai-warning, #fcc419);
+                animation: pulse 1.5s infinite;
+            }
+        }
+
+        // 成功状态
+        &.tool-success {
+            border-color: var(--ai-success, #51cf66);
+
+            .tool-header {
+                background: rgba(81, 207, 102, 0.15);
+            }
+        }
+
+        // 失败状态
+        &.tool-error {
+            border-color: var(--ai-danger, #ff6b6b);
+
+            .tool-header {
+                background: rgba(255, 107, 107, 0.15);
+            }
+
+            .tool-output-content {
+                color: var(--ai-danger, #ff6b6b);
+            }
+        }
+
+        // 错误消息样式
+        .tool-error-message {
+            .tool-output-content {
+                color: var(--ai-danger, #ff6b6b);
+            }
+        }
+    }
+
+    // 分隔线样式
+    .round-divider {
+        text-align: center;
+        color: var(--ai-text-secondary, #adb5bd);
+        font-size: 12px;
+        padding: 8px 0;
+        margin: 8px 0;
+        border-top: 1px dashed var(--ai-border, #4a4a4a);
+    }
+
+    // 状态块样式
+    .agent-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        background: var(--ai-bg-tertiary, #3d3d3d);
+        border-radius: 6px;
+        font-size: 13px;
+        color: var(--ai-text-primary, #f8f9fa);
+        margin-top: 8px;
+    }
+
+    // 文本块样式
+    .message-text {
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--ai-text-primary, #f8f9fa);
+        word-wrap: break-word;
+
+        p {
+            margin: 0 0 8px 0;
+
+            &:last-child {
+                margin-bottom: 0;
+            }
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            margin: 12px 0 8px 0;
+            font-weight: 600;
+            color: var(--ai-primary, #4dabf7);
+        }
+
+        pre {
+            background: var(--ai-bg-tertiary, #3d3d3d);
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 8px 0;
+
+            code {
+                background: transparent;
+                padding: 0;
+            }
+        }
+
+        code {
+            background: var(--ai-bg-tertiary, #3d3d3d);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', 'Consolas', monospace;
+        }
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
