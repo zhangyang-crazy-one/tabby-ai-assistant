@@ -375,6 +375,12 @@ npm run clean      # 清理构建文件
 
 ### 重构记录
 
+- **v1.0.38**: OpenAI 兼容接口 Agent 模式工具调用修复
+  - **问题修复**: 「AI indicated incomplete task but no tools called」错误
+  - **问题原因**: 非流式回退 (disableStreaming) 模式下忽略 `tool_calls`
+  - **修复内容**: 非流式响应中正确解析并发射 `tool_use_start` / `tool_use_end` 事件
+  - **受影响场景**: 使用 DeepSeek、OneAPI 等不支持流式的第三方站点
+
 - **v1.0.37**: 侧边栏标题栏优化 - 跨平台 UI 增强
   - **问题修复**: macOS 系统控制按钮（红绿灯）被侧边栏遮挡
   - **新增组件**: 品牌标题栏（AI Assistant logo + 可拖拽区域）

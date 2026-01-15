@@ -138,9 +138,49 @@ export class OpenAiCompatibleProviderService extends BaseAiProvider {
                             stream: false
                         });
 
-                        const content = response.data.choices?.[0]?.message?.content || '';
-                        
-                        // 模拟流式响应：一次性发送全部内容
+                        const message = response.data.choices?.[0]?.message;
+                        const content = message?.content || '';
+                        const toolCalls = message?.tool_calls || [];
+
+                        // 发射工具调用事件（如果有）
+                        if (toolCalls.length > 0) {
+                            this.logger.debug('Non-streaming response contains tool_calls', { count: toolCalls.length });
+                            for (const toolCall of toolCalls) {
+                                const toolId = toolCall.id || `tool_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                                const toolName = toolCall.function?.name || '';
+                                const toolArgs = toolCall.function?.arguments || '';
+
+                                // 解析 arguments 为 JSON 对象
+                                let parsedInput = {};
+                                try {
+                                    parsedInput = JSON.parse(toolArgs);
+                                } catch (e) {
+                                    // 如果解析失败，使用原始字符串
+                                }
+
+                                // 发射 tool_use_start
+                                subscriber.next({
+                                    type: 'tool_use_start',
+                                    toolCall: {
+                                        id: toolId,
+                                        name: toolName,
+                                        input: {}
+                                    }
+                                });
+
+                                // 发射 tool_use_end
+                                subscriber.next({
+                                    type: 'tool_use_end',
+                                    toolCall: {
+                                        id: toolId,
+                                        name: toolName,
+                                        input: parsedInput
+                                    }
+                                });
+                            }
+                        }
+
+                        // 发射文本内容
                         subscriber.next({
                             type: 'text_delta',
                             textDelta: content
