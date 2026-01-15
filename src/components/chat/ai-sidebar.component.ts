@@ -122,7 +122,7 @@ import { AnyUIStreamEvent } from '../../services/tools/types/ui-stream-event.typ
                                                 <ng-container *ngSwitchDefault>🔧</ng-container>
                                             </ng-container>
                                         </span>
-                                        <span class="tool-name">{{ block.name }}</span>
+                                        <span class="tool-name">{{ block.name || '未知工具' }}</span>
                                         <span class="tool-status" *ngIf="block.status === 'executing'">执行中...</span>
                                         <span class="tool-duration" *ngIf="block.status !== 'executing' && block.duration">{{ block.duration }}ms</span>
                                     </div>

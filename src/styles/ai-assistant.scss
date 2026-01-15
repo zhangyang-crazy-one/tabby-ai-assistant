@@ -465,188 +465,185 @@
 // ============================================
 // 工具调用卡片样式 - 供 AiSidebarComponent 使用
 // ============================================
-.ai-sidebar-container,
-.ai-chat-interface,
-.ai-assistant {
-    .tool-call-card {
-        margin: 12px 0;
-        border-radius: 8px;
-        border: 1px solid var(--ai-border, #4a4a4a);
-        overflow: hidden;
-        background: var(--ai-bg-tertiary, #3d3d3d);
 
-        .tool-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            background: rgba(0, 0, 0, 0.2);
-            border-bottom: 1px solid var(--ai-border, #4a4a4a);
+.tool-call-card {
+    margin: 12px 0;
+    border-radius: 8px !important;
+    border: 1px solid var(--ai-border, #4a4a4a) !important;
+    overflow: hidden;
+    background: var(--ai-bg-tertiary, #3d3d3d) !important;
 
-            .tool-icon {
-                font-size: 14px;
-            }
-
-            .tool-name {
-                font-weight: 600;
-                font-family: 'Courier New', 'Consolas', monospace;
-                color: var(--ai-primary, #4dabf7);
-            }
-
-            .tool-status {
-                font-size: 12px;
-                color: var(--ai-text-secondary, #adb5bd);
-                margin-left: auto;
-            }
-
-            .tool-duration {
-                font-size: 11px;
-                color: var(--ai-text-secondary, #adb5bd);
-                background: rgba(0, 0, 0, 0.3);
-                padding: 2px 6px;
-                border-radius: 4px;
-                margin-left: auto;
-            }
-        }
-
-        .tool-output {
-            padding: 8px 12px;
-
-            .tool-output-header {
-                font-size: 11px;
-                font-weight: 600;
-                color: var(--ai-text-secondary, #adb5bd);
-                margin-bottom: 4px;
-            }
-
-            .tool-output-content {
-                margin: 0;
-                padding: 8px;
-                background: rgba(0, 0, 0, 0.2);
-                border-radius: 4px;
-                font-size: 12px;
-                overflow-x: auto;
-                max-height: 200px;
-                overflow-y: auto;
-                white-space: pre-wrap;
-                word-break: break-word;
-            }
-
-            .tool-output-truncated {
-                font-size: 11px;
-                color: var(--ai-text-secondary, #adb5bd);
-                font-style: italic;
-                margin-top: 4px;
-            }
-        }
-
-        // 执行中状态
-        &.tool-executing {
-            border-color: var(--ai-warning, #fcc419);
-
-            .tool-header {
-                background: rgba(252, 196, 25, 0.15);
-            }
-
-            .tool-status {
-                color: var(--ai-warning, #fcc419);
-                animation: pulse 1.5s infinite;
-            }
-        }
-
-        // 成功状态
-        &.tool-success {
-            border-color: var(--ai-success, #51cf66);
-
-            .tool-header {
-                background: rgba(81, 207, 102, 0.15);
-            }
-        }
-
-        // 失败状态
-        &.tool-error {
-            border-color: var(--ai-danger, #ff6b6b);
-
-            .tool-header {
-                background: rgba(255, 107, 107, 0.15);
-            }
-
-            .tool-output-content {
-                color: var(--ai-danger, #ff6b6b);
-            }
-        }
-
-        // 错误消息样式
-        .tool-error-message {
-            .tool-output-content {
-                color: var(--ai-danger, #ff6b6b);
-            }
-        }
-    }
-
-    // 分隔线样式
-    .round-divider {
-        text-align: center;
-        color: var(--ai-text-secondary, #adb5bd);
-        font-size: 12px;
-        padding: 8px 0;
-        margin: 8px 0;
-        border-top: 1px dashed var(--ai-border, #4a4a4a);
-    }
-
-    // 状态块样式
-    .agent-status {
+    .tool-header {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 8px;
         padding: 8px 12px;
-        background: var(--ai-bg-tertiary, #3d3d3d);
-        border-radius: 6px;
-        font-size: 13px;
-        color: var(--ai-text-primary, #f8f9fa);
-        margin-top: 8px;
-    }
+        background: rgba(0, 0, 0, 0.2) !important;
+        border-bottom: 1px solid var(--ai-border, #4a4a4a) !important;
 
-    // 文本块样式
-    .message-text {
-        font-size: 14px;
-        line-height: 1.6;
-        color: var(--ai-text-primary, #f8f9fa);
-        word-wrap: break-word;
-
-        p {
-            margin: 0 0 8px 0;
-
-            &:last-child {
-                margin-bottom: 0;
-            }
+        .tool-icon {
+            font-size: 14px;
         }
 
-        h1, h2, h3, h4, h5, h6 {
-            margin: 12px 0 8px 0;
+        .tool-name {
             font-weight: 600;
+            font-family: 'Courier New', 'Consolas', monospace;
             color: var(--ai-primary, #4dabf7);
         }
 
-        pre {
-            background: var(--ai-bg-tertiary, #3d3d3d);
-            padding: 12px;
-            border-radius: 8px;
-            overflow-x: auto;
-            margin: 8px 0;
-
-            code {
-                background: transparent;
-                padding: 0;
-            }
+        .tool-status {
+            font-size: 12px;
+            color: var(--ai-text-secondary, #adb5bd);
+            margin-left: auto;
         }
 
-        code {
-            background: var(--ai-bg-tertiary, #3d3d3d);
+        .tool-duration {
+            font-size: 11px;
+            color: var(--ai-text-secondary, #adb5bd);
+            background: rgba(0, 0, 0, 0.3);
             padding: 2px 6px;
             border-radius: 4px;
-            font-family: 'Courier New', 'Consolas', monospace;
+            margin-left: auto;
         }
+    }
+
+    .tool-output {
+        padding: 8px 12px;
+
+        .tool-output-header {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--ai-text-secondary, #adb5bd);
+            margin-bottom: 4px;
+        }
+
+        .tool-output-content {
+            margin: 0;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            font-size: 12px;
+            overflow-x: auto;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .tool-output-truncated {
+            font-size: 11px;
+            color: var(--ai-text-secondary, #adb5bd);
+            font-style: italic;
+            margin-top: 4px;
+        }
+    }
+
+    // 执行中状态
+    &.tool-executing {
+        border-color: var(--ai-warning, #fcc419);
+
+        .tool-header {
+            background: rgba(252, 196, 25, 0.15);
+        }
+
+        .tool-status {
+            color: var(--ai-warning, #fcc419);
+            animation: pulse 1.5s infinite;
+        }
+    }
+
+    // 成功状态
+    &.tool-success {
+        border-color: var(--ai-success, #51cf66);
+
+        .tool-header {
+            background: rgba(81, 207, 102, 0.15);
+        }
+    }
+
+    // 失败状态
+    &.tool-error {
+        border-color: var(--ai-danger, #ff6b6b);
+
+        .tool-header {
+            background: rgba(255, 107, 107, 0.15);
+        }
+
+        .tool-output-content {
+            color: var(--ai-danger, #ff6b6b);
+        }
+    }
+
+    // 错误消息样式
+    .tool-error-message {
+        .tool-output-content {
+            color: var(--ai-danger, #ff6b6b);
+        }
+    }
+}
+
+// 分隔线样式
+.round-divider {
+    text-align: center;
+    color: var(--ai-text-secondary, #adb5bd);
+    font-size: 12px;
+    padding: 8px 0;
+    margin: 8px 0;
+    border-top: 1px dashed var(--ai-border, #4a4a4a);
+}
+
+// 状态块样式
+.agent-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--ai-bg-tertiary, #3d3d3d);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--ai-text-primary, #f8f9fa);
+    margin-top: 8px;
+}
+
+// 文本块样式
+.message-text {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--ai-text-primary, #f8f9fa);
+    word-wrap: break-word;
+
+    p {
+        margin: 0 0 8px 0;
+
+        &:last-child {
+            margin-bottom: 0;
+        }
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        margin: 12px 0 8px 0;
+        font-weight: 600;
+        color: var(--ai-primary, #4dabf7);
+    }
+
+    pre {
+        background: var(--ai-bg-tertiary, #3d3d3d);
+        padding: 12px;
+        border-radius: 8px;
+        overflow-x: auto;
+        margin: 8px 0;
+
+        code {
+            background: transparent;
+            padding: 0;
+        }
+    }
+
+    code {
+        background: var(--ai-bg-tertiary, #3d3d3d);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: 'Courier New', 'Consolas', monospace;
     }
 }
 
@@ -658,3 +655,212 @@
         opacity: 0.5;
     }
 }
+
+// 设置表单
+.ai-settings {
+    .settings-section {
+        margin-bottom: 2rem;
+
+        h3 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--ai-border);
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+
+            label {
+                display: block;
+                font-weight: 500;
+                margin-bottom: 0.5rem;
+            }
+
+            .form-control {
+                width: 100%;
+                padding: 0.5rem;
+                border: 1px solid var(--ai-border);
+                border-radius: var(--ai-border-radius);
+                background-color: var(--ai-bg-primary);
+                color: var(--ai-text-primary);
+
+                &:focus {
+                    outline: none;
+                    border-color: var(--ai-primary);
+                }
+            }
+
+            .form-text {
+                font-size: 0.875rem;
+                opacity: 0.8;
+                margin-top: 0.25rem;
+            }
+        }
+
+        .form-check {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+
+            input[type="checkbox"] {
+                width: 1rem;
+                height: 1rem;
+            }
+
+            label {
+                margin: 0;
+                cursor: pointer;
+            }
+        }
+    }
+}
+
+// 加载动画
+.ai-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    .spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--ai-border);
+        border-top-color: var(--ai-primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+// 错误消息
+.ai-error {
+    padding: 0.75rem;
+    background-color: rgba(220, 53, 69, 0.1);
+    border: 1px solid var(--ai-danger);
+    border-radius: var(--ai-border-radius);
+    color: var(--ai-danger);
+    margin: 0.5rem 0;
+}
+
+// 成功消息
+.ai-success {
+    padding: 0.75rem;
+    background-color: rgba(40, 167, 69, 0.1);
+    border: 1px solid var(--ai-success);
+    border-radius: var(--ai-border-radius);
+    color: var(--ai-success);
+    margin: 0.5rem 0;
+}
+
+// 工具提示
+.ai-tooltip {
+    position: relative;
+    display: inline-block;
+
+    &:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 0.5rem;
+        background-color: var(--ai-text-primary);
+        color: var(--ai-light);
+        border-radius: var(--ai-border-radius);
+        font-size: 0.875rem;
+        white-space: nowrap;
+        z-index: 1000;
+        opacity: 0;
+        animation: fadeIn 0.2s ease-in-out forwards;
+    }
+}
+
+@keyframes fadeIn {
+    to {
+        opacity: 1;
+    }
+}
+
+// 响应式设计
+@media (max-width: 768px) {
+    .ai-message {
+        max-width: 95%;
+    }
+
+    .ai-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+}
+
+// 左侧滑入模态框样式
+.ai-chat-modal-left {
+    .modal-dialog {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        margin: 0 !important;
+        max-width: 450px !important;
+        width: 100% !important;
+        height: 100vh !important;
+        transform: none !important;
+
+        .modal-content {
+            height: 100% !important;
+            border: none !important;
+            border-radius: 0 !important;
+            background: var(--ai-bg-primary, #1a1a2e) !important;
+            display: flex;
+            flex-direction: column;
+        }
+    }
+
+    // 动画效果
+    &.fade .modal-dialog {
+        transform: translateX(-100%) !important;
+        transition: transform 0.3s ease-out !important;
+    }
+
+    &.show .modal-dialog {
+        transform: translateX(0) !important;
+    }
+
+    // 背景遮罩
+    .modal-backdrop {
+        background-color: rgba(0, 0, 0, 0.3) !important;
+    }
+}
+
+// Toast 动画
+@keyframes toastSlideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes toastSlideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+

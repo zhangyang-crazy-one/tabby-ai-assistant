@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
-import { Observable, Observer, from } from 'rxjs';
+import { Observable, Observer } from 'rxjs';
 import axios, { AxiosInstance } from 'axios';
+import { Anthropic } from '@anthropic-ai/sdk';
 import { BaseAiProvider } from './base-provider.service';
 import { ProviderCapability, ValidationResult } from '../../types/provider.types';
 import { ChatRequest, ChatResponse, CommandRequest, CommandResponse, ExplainRequest, ExplainResponse, AnalysisRequest, AnalysisResponse, MessageRole, StreamEvent } from '../../types/ai.types';
@@ -8,7 +9,9 @@ import { LoggerService } from '../core/logger.service';
 
 /**
  * GLM (ChatGLM) AI提供商
- * 基于Anthropic兼容API格式
+ * 支持两种API格式：
+ * 1. Anthropic兼容格式: https://open.bigmodel.cn/api/anthropic -> 使用 Anthropic SDK
+ * 2. OpenAI兼容格式: https://open.bigmodel.cn/api/paas/v4 -> 使用 Axios
  */
 @Injectable()
 export class GlmProviderService extends BaseAiProvider {
@@ -28,10 +31,31 @@ export class GlmProviderService extends BaseAiProvider {
         }
     };
 
-    private client: AxiosInstance | null = null;
+    // 模式：true = Anthropic SDK, false = Axios (OpenAI 格式)
+    private useAnthropicSdk: boolean = false;
+    // 客户端：可以是 Anthropic SDK 或 Axios 实例
+    private anthropicClient: Anthropic | null = null;
+    private axiosClient: AxiosInstance | null = null;
 
     constructor(logger: LoggerService) {
         super(logger);
+    }
+
+    /**
+     * 检测 API 格式模式
+     * @param baseURL 基础 URL
+     * @returns true = Anthropic 格式 (SDK), false = OpenAI 格式 (Axios)
+     */
+    private detectApiMode(baseURL: string): boolean {
+        // Anthropic 兼容格式包含 /anthropic 路径
+        return baseURL.includes('/anthropic');
+    }
+
+    /**
+     * 获取当前 API 模式
+     */
+    private isAnthropicMode(): boolean {
+        return this.useAnthropicSdk;
     }
 
     /**
@@ -44,7 +68,7 @@ export class GlmProviderService extends BaseAiProvider {
     }
 
     /**
-     * 初始化HTTP客户端
+     * 初始化客户端（根据 baseURL 自动选择 SDK 或 Axios）
      */
     private initializeClient(): void {
         if (!this.config?.apiKey) {
@@ -52,51 +76,67 @@ export class GlmProviderService extends BaseAiProvider {
             return;
         }
 
+        const baseURL = this.getBaseURL();
+        this.useAnthropicSdk = this.detectApiMode(baseURL);
+
         try {
-            this.client = axios.create({
-                baseURL: this.getBaseURL(),
-                timeout: this.getTimeout(),
-                headers: {
-                    'Authorization': `Bearer ${this.config.apiKey}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            if (this.useAnthropicSdk) {
+                // 方案1: Anthropic SDK (用于 /api/anthropic 格式)
+                this.anthropicClient = new Anthropic({
+                    apiKey: this.config.apiKey,
+                    baseURL: baseURL
+                });
+                this.logger.info('GLM client initialized (Anthropic SDK)', {
+                    baseURL,
+                    model: this.config.model || 'glm-4.6'
+                });
+            } else {
+                // 方案2: Axios (用于 /api/paas/v4 OpenAI 格式)
+                this.axiosClient = axios.create({
+                    baseURL: baseURL,
+                    timeout: this.getTimeout(),
+                    headers: {
+                        'Authorization': `Bearer ${this.config.apiKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
 
-            // 添加请求拦截器
-            this.client.interceptors.request.use(
-                (config) => {
-                    this.logger.debug('GLM API request', {
-                        url: config.url,
-                        method: config.method,
-                        data: this.sanitizeRequest(config.data)
-                    });
-                    return config;
-                },
-                (error) => {
-                    this.logger.error('GLM API request error', error);
-                    return Promise.reject(error);
-                }
-            );
+                // 添加请求拦截器
+                this.axiosClient.interceptors.request.use(
+                    (config) => {
+                        this.logger.debug('GLM API request', {
+                            url: config.url,
+                            method: config.method,
+                            data: this.sanitizeRequest(config.data)
+                        });
+                        return config;
+                    },
+                    (error) => {
+                        this.logger.error('GLM API request error', error);
+                        return Promise.reject(error);
+                    }
+                );
 
-            // 添加响应拦截器
-            this.client.interceptors.response.use(
-                (response) => {
-                    this.logger.debug('GLM API response', {
-                        status: response.status,
-                        data: this.sanitizeResponse(response.data)
-                    });
-                    return response;
-                },
-                (error) => {
-                    this.logger.error('GLM API response error', error);
-                    return Promise.reject(error);
-                }
-            );
+                // 添加响应拦截器
+                this.axiosClient.interceptors.response.use(
+                    (response) => {
+                        this.logger.debug('GLM API response', {
+                            status: response.status,
+                            data: this.sanitizeResponse(response.data)
+                        });
+                        return response;
+                    },
+                    (error) => {
+                        this.logger.error('GLM API response error', error);
+                        return Promise.reject(error);
+                    }
+                );
 
-            this.logger.info('GLM client initialized', {
-                baseURL: this.getBaseURL(),
-                model: this.config.model || 'glm-4.6'
-            });
+                this.logger.info('GLM client initialized (Axios)', {
+                    baseURL,
+                    model: this.config.model || 'glm-4.6'
+                });
+            }
         } catch (error) {
             this.logger.error('Failed to initialize GLM client', error);
             throw error;
@@ -104,10 +144,23 @@ export class GlmProviderService extends BaseAiProvider {
     }
 
     /**
-     * 聊天功能
+     * 聊天功能 - 支持双模式
+     * 方案1: Anthropic SDK -> /v1/messages
+     * 方案2: Axios -> /chat/completions
      */
     async chat(request: ChatRequest): Promise<ChatResponse> {
-        if (!this.client) {
+        if (this.useAnthropicSdk) {
+            return this.chatWithAnthropicSdk(request);
+        } else {
+            return this.chatWithAxios(request);
+        }
+    }
+
+    /**
+     * 方案1: 使用 Anthropic SDK (适用于 /api/anthropic 格式)
+     */
+    private async chatWithAnthropicSdk(request: ChatRequest): Promise<ChatResponse> {
+        if (!this.anthropicClient) {
             throw new Error('GLM client not initialized');
         }
 
@@ -115,7 +168,7 @@ export class GlmProviderService extends BaseAiProvider {
 
         try {
             const response = await this.withRetry(async () => {
-                const result = await this.client!.post('/v1/messages', {
+                const result = await this.anthropicClient!.messages.create({
                     model: this.config?.model || 'glm-4.6',
                     max_tokens: request.maxTokens || 1000,
                     system: request.systemPrompt || this.getDefaultSystemPrompt(),
@@ -123,11 +176,10 @@ export class GlmProviderService extends BaseAiProvider {
                     temperature: request.temperature || 0.95,
                     stream: request.stream || false
                 });
-
-                this.logResponse(result.data);
-                return result.data;
+                return result;
             });
 
+            this.logResponse(response);
             return this.transformChatResponse(response);
 
         } catch (error) {
@@ -137,139 +189,131 @@ export class GlmProviderService extends BaseAiProvider {
     }
 
     /**
-     * 流式聊天功能 - 支持工具调用事件
+     * 方案2: 使用 Axios (适用于 /api/paas/v4 OpenAI 格式)
+     */
+    private async chatWithAxios(request: ChatRequest): Promise<ChatResponse> {
+        if (!this.axiosClient) {
+            throw new Error('GLM client not initialized');
+        }
+
+        this.logRequest(request);
+
+        try {
+            const response = await this.withRetry(async () => {
+                const result = await this.axiosClient!.post('/chat/completions', {
+                    model: this.config?.model || 'glm-4',
+                    messages: request.messages.map(msg => ({
+                        role: msg.role,
+                        content: msg.content
+                    })),
+                    max_tokens: request.maxTokens || 1000,
+                    temperature: request.temperature || 0.95,
+                    stream: request.stream || false
+                });
+                return result.data;
+            });
+
+            this.logResponse(response);
+            return this.transformOpenAIResponse(response);
+
+        } catch (error) {
+            this.logError(error, { request });
+            throw new Error(`GLM chat failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * 流式聊天功能 - 支持双模式
+     * 方案1: Anthropic SDK -> 自动 SSE 解析，浏览器兼容
+     * 方案2: Axios -> responseType: 'text' + 手动解析 SSE
      */
     chatStream(request: ChatRequest): Observable<StreamEvent> {
+        if (this.useAnthropicSdk) {
+            return this.chatStreamWithAnthropicSdk(request);
+        } else {
+            return this.chatStreamWithAxios(request);
+        }
+    }
+
+    /**
+     * 方案1: Anthropic SDK 流式 (适用于 /api/anthropic 格式)
+     * 优势: SDK 自动处理 SSE，浏览器完全兼容
+     */
+    private chatStreamWithAnthropicSdk(request: ChatRequest): Observable<StreamEvent> {
         return new Observable<StreamEvent>((subscriber: Observer<StreamEvent>) => {
-            if (!this.client) {
+            if (!this.anthropicClient) {
                 const error = new Error('GLM client not initialized');
                 subscriber.next({ type: 'error', error: error.message });
                 subscriber.error(error);
                 return;
             }
 
-            let currentToolId = '';
-            let currentToolName = '';
-            let currentToolInput = '';
-            let fullContent = '';
+            this.logRequest(request);
 
             const abortController = new AbortController();
 
             const runStream = async () => {
                 try {
-                    const response = await this.client!.post('/v1/messages', {
+                    const stream = (this.anthropicClient!.messages.stream as any)({
                         model: this.config?.model || 'glm-4.6',
                         max_tokens: request.maxTokens || 1000,
                         system: request.systemPrompt || this.getDefaultSystemPrompt(),
                         messages: this.transformMessages(request.messages),
-                        temperature: request.temperature || 0.95,
-                        stream: true
-                    }, {
-                        responseType: 'stream'
+                        temperature: request.temperature || 0.95
                     });
 
-                    const stream = response.data;
-                    let buffer = '';
+                    let currentToolId = '';
+                    let currentToolName = '';
+                    let currentToolInput = '';
+                    let fullContent = '';
 
-                    for await (const chunk of stream) {
+                    for await (const event of stream) {
                         if (abortController.signal.aborted) break;
 
-                        // 兼容多种 chunk 类型：string, Buffer, ArrayBuffer, Uint8Array
-                        // 在 Electron/Node.js 环境中，Axios 流可能返回 Buffer 而非 ArrayBuffer
-                        let chunkStr: string;
-                        if (typeof chunk === 'string') {
-                            chunkStr = chunk;
-                        } else if (chunk instanceof Buffer) {
-                            chunkStr = chunk.toString('utf-8');
-                        } else if (chunk instanceof Uint8Array || chunk instanceof ArrayBuffer) {
-                            chunkStr = new TextDecoder().decode(chunk);
-                        } else {
-                            // 兜底处理：尝试转换为字符串
-                            chunkStr = String(chunk);
-                        }
-                        
-                        buffer += chunkStr;
-                        const lines = buffer.split('\n');
-                        buffer = lines.pop() || '';
+                        this.logger.debug('Stream event', { type: event.type });
 
-                        for (const line of lines) {
-                            if (line.startsWith('data:')) {
-                                const data = line.slice(5).trim();
-                                if (data === '[DONE]') continue;
-
+                        if (event.type === 'content_block_delta') {
+                            const delta = event.delta as any;
+                            if (delta.type === 'text_delta') {
+                                fullContent += delta.text;
+                                subscriber.next({ type: 'text_delta', textDelta: delta.text });
+                            } else if (delta.type === 'input_json_delta') {
+                                currentToolInput += delta.partial_json || '';
+                            }
+                        } else if (event.type === 'content_block_start') {
+                            const block = event.content_block as any;
+                            if (block.type === 'tool_use') {
+                                currentToolId = block.id;
+                                currentToolName = block.name;
+                                currentToolInput = '';
+                                subscriber.next({
+                                    type: 'tool_use_start',
+                                    toolCall: { id: currentToolId, name: currentToolName, input: {} }
+                                });
+                                this.logger.debug('Stream event', { type: 'tool_use_start', name: currentToolName });
+                            }
+                        } else if (event.type === 'content_block_stop') {
+                            if (currentToolId && currentToolName) {
+                                let parsedInput = {};
                                 try {
-                                    const parsed = JSON.parse(data);
-                                    const eventType = parsed.type;
-                                    const eventData = parsed;
-
-                                    this.logger.debug('Stream event', { type: eventType });
-
-                                    // 处理文本增量
-                                    if (eventType === 'content_block_delta' && eventData.delta?.type === 'text_delta') {
-                                        const textDelta = eventData.delta.text;
-                                        fullContent += textDelta;
-                                        subscriber.next({
-                                            type: 'text_delta',
-                                            textDelta
-                                        });
-                                    }
-                                    // 处理工具调用开始
-                                    else if (eventType === 'content_block_start' && eventData.content_block?.type === 'tool_use') {
-                                        currentToolId = eventData.content_block.id || `tool_${Date.now()}`;
-                                        currentToolName = eventData.content_block.name;
-                                        currentToolInput = '';
-                                        subscriber.next({
-                                            type: 'tool_use_start',
-                                            toolCall: {
-                                                id: currentToolId,
-                                                name: currentToolName,
-                                                input: {}
-                                            }
-                                        });
-                                        this.logger.debug('Stream event', { type: 'tool_use_start', name: currentToolName });
-                                    }
-                                    // 处理工具调用参数
-                                    else if (eventType === 'content_block_delta' && eventData.delta?.type === 'input_json_delta') {
-                                        currentToolInput += eventData.delta.partial_json || '';
-                                    }
-                                    // 处理工具调用结束
-                                    else if (eventType === 'content_block_stop') {
-                                        if (currentToolId && currentToolName) {
-                                            let parsedInput = {};
-                                            try {
-                                                parsedInput = JSON.parse(currentToolInput || '{}');
-                                            } catch (e) {
-                                                // 使用原始输入
-                                            }
-                                            subscriber.next({
-                                                type: 'tool_use_end',
-                                                toolCall: {
-                                                    id: currentToolId,
-                                                    name: currentToolName,
-                                                    input: parsedInput
-                                                }
-                                            });
-                                            this.logger.debug('Stream event', { type: 'tool_use_end', name: currentToolName });
-                                            currentToolId = '';
-                                            currentToolName = '';
-                                            currentToolInput = '';
-                                        }
-                                    }
-                                } catch (e) {
-                                    // 忽略解析错误
-                                }
+                                    parsedInput = JSON.parse(currentToolInput || '{}');
+                                } catch (e) {}
+                                subscriber.next({
+                                    type: 'tool_use_end',
+                                    toolCall: { id: currentToolId, name: currentToolName, input: parsedInput }
+                                });
+                                this.logger.debug('Stream event', { type: 'tool_use_end', name: currentToolName });
+                                currentToolId = '';
+                                currentToolName = '';
+                                currentToolInput = '';
                             }
                         }
                     }
 
+                    const finalMessage = await stream.finalMessage();
                     subscriber.next({
                         type: 'message_end',
-                        message: {
-                            id: this.generateId(),
-                            role: MessageRole.ASSISTANT,
-                            content: fullContent,
-                            timestamp: new Date()
-                        }
+                        message: this.transformChatResponse(finalMessage).message
                     });
                     this.logger.debug('Stream event', { type: 'message_end', contentLength: fullContent.length });
                     subscriber.complete();
@@ -285,7 +329,118 @@ export class GlmProviderService extends BaseAiProvider {
             };
 
             runStream();
+            return () => abortController.abort();
+        });
+    }
 
+    /**
+     * 方案2: Axios 流式 (适用于 /api/paas/v4 OpenAI 格式)
+     * 修复: 使用 responseType: 'text' 避免浏览器 'stream' 类型错误
+     */
+    private chatStreamWithAxios(request: ChatRequest): Observable<StreamEvent> {
+        return new Observable<StreamEvent>((subscriber: Observer<StreamEvent>) => {
+            if (!this.axiosClient) {
+                const error = new Error('GLM client not initialized');
+                subscriber.next({ type: 'error', error: error.message });
+                subscriber.error(error);
+                return;
+            }
+
+            this.logRequest(request);
+
+            let currentToolId = '';
+            let currentToolName = '';
+            let currentToolInput = '';
+            let fullContent = '';
+
+            const abortController = new AbortController();
+
+            const runStream = async () => {
+                try {
+                    // 使用 responseType: 'text' 而非 'stream' (浏览器兼容)
+                    const response = await this.axiosClient!.post('/chat/completions', {
+                        model: this.config?.model || 'glm-4',
+                        messages: request.messages.map(msg => ({
+                            role: msg.role,
+                            content: msg.content
+                        })),
+                        max_tokens: request.maxTokens || 1000,
+                        temperature: request.temperature || 0.95,
+                        stream: true
+                    }, {
+                        responseType: 'text'  // 关键修复: 浏览器不支持 'stream'
+                    });
+
+                    const stream = response.data;
+                    let buffer = '';
+
+                    for await (const chunk of stream) {
+                        if (abortController.signal.aborted) break;
+
+                        let chunkStr: string;
+                        if (typeof chunk === 'string') {
+                            chunkStr = chunk;
+                        } else if (chunk instanceof Buffer) {
+                            chunkStr = chunk.toString('utf-8');
+                        } else if (chunk instanceof Uint8Array) {
+                            chunkStr = new TextDecoder().decode(chunk);
+                        } else if (chunk instanceof ArrayBuffer) {
+                            chunkStr = new TextDecoder().decode(chunk);
+                        } else {
+                            chunkStr = String(chunk);
+                        }
+
+                        buffer += chunkStr;
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || '';
+
+                        for (const line of lines) {
+                            if (line.startsWith('data:')) {
+                                const data = line.slice(5).trim();
+                                if (data === '[DONE]') continue;
+
+                                try {
+                                    const parsed = JSON.parse(data);
+                                    const choice = parsed.choices?.[0];
+                                    if (!choice) continue;
+
+                                    const delta = choice.delta?.content || '';
+                                    if (delta) {
+                                        fullContent += delta;
+                                        subscriber.next({ type: 'text_delta', textDelta: delta });
+                                    }
+
+                                    if (choice.finish_reason) {
+                                        subscriber.next({
+                                            type: 'message_end',
+                                            message: {
+                                                id: this.generateId(),
+                                                role: MessageRole.ASSISTANT,
+                                                content: fullContent,
+                                                timestamp: new Date()
+                                            }
+                                        });
+                                        this.logger.debug('Stream event', { type: 'message_end', contentLength: fullContent.length });
+                                        subscriber.complete();
+                                    }
+                                } catch (e) {
+                                    // 忽略解析错误
+                                }
+                            }
+                        }
+                    }
+
+                } catch (error) {
+                    if ((error as any).name !== 'AbortError') {
+                        const errorMessage = `GLM stream failed: ${error instanceof Error ? error.message : String(error)}`;
+                        this.logger.error('Stream error', error);
+                        subscriber.next({ type: 'error', error: errorMessage });
+                        subscriber.error(new Error(errorMessage));
+                    }
+                }
+            };
+
+            runStream();
             return () => abortController.abort();
         });
     }
@@ -360,18 +515,34 @@ export class GlmProviderService extends BaseAiProvider {
     }
 
     protected async sendTestRequest(request: ChatRequest): Promise<ChatResponse> {
-        if (!this.client) {
-            throw new Error('GLM client not initialized');
+        if (this.useAnthropicSdk) {
+            // 方案1: Anthropic SDK 测试
+            if (!this.anthropicClient) {
+                throw new Error('GLM client not initialized');
+            }
+            const response = await this.anthropicClient.messages.create({
+                model: this.config?.model || 'glm-4.6',
+                max_tokens: request.maxTokens || 1,
+                messages: this.transformMessages(request.messages),
+                temperature: request.temperature || 0
+            });
+            return this.transformChatResponse(response);
+        } else {
+            // 方案2: Axios 测试
+            if (!this.axiosClient) {
+                throw new Error('GLM client not initialized');
+            }
+            const response = await this.axiosClient.post('/chat/completions', {
+                model: this.config?.model || 'glm-4',
+                messages: request.messages.map(msg => ({
+                    role: msg.role,
+                    content: msg.content
+                })),
+                max_tokens: request.maxTokens || 1,
+                temperature: request.temperature || 0
+            });
+            return this.transformOpenAIResponse(response.data);
         }
-
-        const response = await this.client.post('/v1/messages', {
-            model: this.config?.model || 'glm-4.6',
-            max_tokens: request.maxTokens || 1,
-            messages: this.transformMessages(request.messages),
-            temperature: request.temperature || 0
-        });
-
-        return this.transformChatResponse(response.data);
     }
 
     /**
@@ -472,11 +643,23 @@ export class GlmProviderService extends BaseAiProvider {
     }
 
     /**
-     * 转换聊天响应
+     * 转换聊天响应 (Anthropic 格式)
      */
     private transformChatResponse(response: any): ChatResponse {
-        const content = response.content[0];
-        const text = content.type === 'text' ? content.text : '';
+        let text = '';
+
+        if (response?.content) {
+            if (Array.isArray(response.content)) {
+                for (const block of response.content) {
+                    if (block.type === 'text') {
+                        text += block.text || '';
+                    }
+                    // 注意：工具调用通过流式事件处理，不在此处处理
+                }
+            } else if (typeof response.content === 'string') {
+                text = response.content;
+            }
+        }
 
         return {
             message: {
@@ -485,10 +668,32 @@ export class GlmProviderService extends BaseAiProvider {
                 content: text,
                 timestamp: new Date()
             },
-            usage: response.usage ? {
+            usage: response?.usage ? {
                 promptTokens: response.usage.input_tokens || 0,
                 completionTokens: response.usage.output_tokens || 0,
                 totalTokens: (response.usage.input_tokens || 0) + (response.usage.output_tokens || 0)
+            } : undefined
+        };
+    }
+
+    /**
+     * 转换 OpenAI 格式响应
+     */
+    private transformOpenAIResponse(response: any): ChatResponse {
+        const choice = response.choices?.[0];
+        const message = choice?.message;
+
+        return {
+            message: {
+                id: this.generateId(),
+                role: MessageRole.ASSISTANT,
+                content: message?.content || '',
+                timestamp: new Date()
+            },
+            usage: response?.usage ? {
+                promptTokens: response.usage.prompt_tokens || 0,
+                completionTokens: response.usage.completion_tokens || 0,
+                totalTokens: response.usage.total_tokens || 0
             } : undefined
         };
     }

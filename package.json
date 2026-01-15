@@ -1,6 +1,6 @@
 {
     "name": "tabby-ai-assistant",
-    "version": "1.0.31",
+    "version": "1.0.36",
     "description": "Tabby终端AI助手插件 - 支持多AI提供商（OpenAI、Anthropic、Minimax、GLM、Ollama、vLLM）和MCP服务器",
     "main": "dist/index.js",
     "typings": "dist/index.d.ts",
