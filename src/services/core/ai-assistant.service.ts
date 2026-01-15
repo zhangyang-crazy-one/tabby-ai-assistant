@@ -1135,6 +1135,14 @@ export class AiAssistantService {
                     // 添加工具定义
                     roundRequest.tools = this.terminalTools.getToolDefinitions();
 
+                    // 🔴 调试日志：打印本轮请求的消息历史
+                    this.logger.warn(`DEBUG ROUND ${agentState.currentRound}: Round request messages`, {
+                        messageCount: roundRequest.messages.length,
+                        roles: roundRequest.messages.map((m: any) => m.role),
+                        lastMessageRole: roundRequest.messages[roundRequest.messages.length - 1]?.role,
+                        hasToolResults: roundRequest.messages.some((m: any) => m.toolResults)
+                    });
+
                     // 直接订阅 provider 的流（不使用 merge，否则需要所有源都 complete）
                     activeProvider.chatStream(roundRequest).subscribe({
                         next: (event: any) => {
@@ -1162,6 +1170,12 @@ export class AiAssistantService {
                                     // 收集工具调用
                                     if (event.toolCall) {
                                         pendingToolCalls.push(event.toolCall as ToolCall);
+                                        // 🔴 调试日志
+                                        this.logger.warn(`DEBUG: tool_use_end collected, pendingToolCalls count: ${pendingToolCalls.length}`, {
+                                            toolCallId: event.toolCall.id,
+                                            toolCallName: event.toolCall.name,
+                                            totalPending: pendingToolCalls.length
+                                        });
                                         subscriber.next({
                                             type: 'tool_use_end',
                                             toolCall: event.toolCall
@@ -1198,7 +1212,7 @@ export class AiAssistantService {
                                         role: MessageRole.ASSISTANT,
                                         content: roundTextContent || '', // 即使为空也要添加
                                         timestamp: new Date(),
-                                        // 保留工具调用记录，供下一轮 transformMessages 构建 Anthropic tool_use 格式
+                                        // 🔴 保留工具调用记录（使用 toolCalls 字段，ChatMessage 类型支持）
                                         toolCalls: pendingToolCalls.map(tc => ({
                                             id: tc.id,
                                             name: tc.name,
@@ -1281,13 +1295,21 @@ export class AiAssistantService {
                                         agentState
                                     );
 
-                                    // 将工具结果添加到消息历史
-                                    const toolResultMessage = this.buildToolResultMessage(toolResults);
-                                    conversationMessages.push(toolResultMessage);
+                                    // 将工具结果添加到消息历史（每个工具结果作为独立消息）
+                                    const toolResultMessages = this.buildToolResultMessages(toolResults);
+
+                                    // 🔴 调试日志：打印 tool 结果消息
+                                    this.logger.warn(`DEBUG: Built ${toolResultMessages.length} tool result messages`, {
+                                        messageRoles: toolResultMessages.map((m: any) => m.role),
+                                        toolUseIds: toolResultMessages.map((m: any) => m.tool_use_id)
+                                    });
+
+                                    conversationMessages.push(...toolResultMessages);
 
                                     this.logger.info('Tool results added to conversation, starting next round', {
                                         round: agentState.currentRound,
-                                        totalMessages: conversationMessages.length
+                                        totalMessages: conversationMessages.length,
+                                        toolResultCount: toolResultMessages.length
                                     });
 
                                     // 执行工具后的终止检测 (不检查 no_tools)
@@ -1543,31 +1565,42 @@ export class AiAssistantService {
 
     /**
      * 构建工具结果消息
-     * 关键：添加 toolResults 和 tool_use_id 字段，供 transformMessages 正确识别和处理
+     * 为每个工具结果创建独立的消息，确保 tool_call_id 与原始 tool_calls 匹配
+     * 关键：每个消息都有独立的 tool_use_id，供 DeepSeek/OpenAI API 正确识别
      */
-    private buildToolResultMessage(results: ToolResult[]): ChatMessage {
-        const content = results.map(r => {
-            const toolName = r.name || r.tool_use_id;
+    private buildToolResultMessages(results: ToolResult[]): ChatMessage[] {
+        // 为每个工具结果创建独立的 ChatMessage
+        return results.map((r, index) => {
+            const toolName = r.name || r.tool_use_id || `tool_${index}`;
             const status = r.is_error ? '执行失败' : '执行成功';
-            return `【${toolName}】${status}。\n返回结果：${r.content}`;
-        }).join('\n\n');
 
-        return {
-            id: this.generateId(),
-            role: MessageRole.TOOL,
-            // 添加提示让 AI 继续完成用户的其他请求
-            content: `工具已执行完成：\n\n${content}\n\n请检查用户的原始请求，如果还有未完成的任务，请继续调用相应工具完成。如果所有任务都已完成，请总结结果回复用户。`,
-            timestamp: new Date(),
-            // 关键：添加 toolResults 字段供 transformMessages 识别
-            toolResults: results.map(r => ({
-                tool_use_id: r.tool_use_id,
-                name: r.name,
-                content: r.content,
-                is_error: r.is_error
-            })),
-            // 保留 tool_use_id 供简单识别
-            tool_use_id: results[0]?.tool_use_id || ''
-        };
+            // 判断是否还有后续结果
+            const isLast = index === results.length - 1;
+            const remainingCount = results.length - index - 1;
+
+            // 提示语根据是否为最后一个结果
+            const continuationHint = isLast
+                ? '\n\n请检查用户的原始请求，如果还有未完成的任务，请继续调用相应工具完成。如果所有任务都已完成，请总结结果回复用户。'
+                : remainingCount > 0
+                    ? `\n\n（还有 ${remainingCount} 个工具结果待处理...）`
+                    : '';
+
+            return {
+                id: this.generateId(),
+                role: MessageRole.TOOL,
+                content: `【${toolName}】${status}。\n返回结果：${r.content}${continuationHint}`,
+                timestamp: new Date(),
+                // 每个消息只包含自己的 tool_use_id（这是 DeepSeek/OpenAI 要求的格式）
+                tool_use_id: r.tool_use_id || '',
+                // 保留 toolResults 字段供 transformMessages 识别（单个结果）
+                toolResults: [{
+                    tool_use_id: r.tool_use_id || '',
+                    name: r.name || '',
+                    content: r.content || '',
+                    is_error: r.is_error || false
+                }]
+            };
+        });
     }
 
     /**

@@ -147,7 +147,8 @@ export namespace ProviderConfigUtils {
             retries: config.retries ?? defaults.retries,
             authConfig: config.authConfig || defaults.authConfig,
             enabled: config.enabled ?? true,
-            contextWindow: config.contextWindow ?? defaults.contextWindow
+            contextWindow: config.contextWindow ?? defaults.contextWindow,
+            disableStreaming: config.disableStreaming ?? false  // ✅ 新增
         };
     }
 

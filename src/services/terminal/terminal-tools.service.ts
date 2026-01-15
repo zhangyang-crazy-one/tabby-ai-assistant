@@ -9,7 +9,7 @@ import { MCPClientManager } from '../mcp/mcp-client-manager.service';
 export interface ToolDefinition {
     name: string;
     description: string;
-    input_schema: {
+    parameters: {  // 使用 OpenAI 标准的 "parameters" 而非 "input_schema"
         type: string;
         properties: Record<string, any>;
         required?: string[];
@@ -117,13 +117,13 @@ export class TerminalToolsService {
         {
             name: 'task_complete',
             description: `【重要】当你完成了用户请求的所有任务后，必须调用此工具来结束任务循环。
-调用此工具后，Agent 将停止继续执行，你的 summary 将作为最终回复展示给用户。
-使用场景：
-- 所有工具调用都成功完成
-- 遇到无法解决的问题需要停止
-- 用户请求已被完整满足
-注意：如果还有未完成的任务，请先完成它们再调用此工具。`,
-            input_schema: {
+ 调用此工具后，Agent 将停止继续执行，你的 summary 将作为最终回复展示给用户。
+ 使用场景：
+ - 所有工具调用都成功完成
+ - 遇到无法解决的问题需要停止
+ - 用户请求已被完整满足
+ 注意：如果还有未完成的任务，请先完成它们再调用此工具。`,
+            parameters: {
                 type: 'object',
                 properties: {
                     summary: {
@@ -146,7 +146,7 @@ export class TerminalToolsService {
         {
             name: 'read_terminal_output',
             description: '读取指定终端的最近输出内容。用于获取命令执行结果或终端状态。',
-            input_schema: {
+            parameters: {
                 type: 'object',
                 properties: {
                     lines: {
@@ -164,7 +164,7 @@ export class TerminalToolsService {
         {
             name: 'write_to_terminal',
             description: '向终端写入命令。可以指定终端索引或使用当前活动终端。',
-            input_schema: {
+            parameters: {
                 type: 'object',
                 properties: {
                     command: {
@@ -186,7 +186,7 @@ export class TerminalToolsService {
         {
             name: 'get_terminal_list',
             description: '获取所有打开的终端列表，包括终端 ID、标题、活动状态等。',
-            input_schema: {
+            parameters: {
                 type: 'object',
                 properties: {},
                 required: []
@@ -195,7 +195,7 @@ export class TerminalToolsService {
         {
             name: 'get_terminal_cwd',
             description: '获取当前终端的工作目录。',
-            input_schema: {
+            parameters: {
                 type: 'object',
                 properties: {},
                 required: []
@@ -204,7 +204,7 @@ export class TerminalToolsService {
         {
             name: 'get_terminal_selection',
             description: '获取当前终端中选中的文本。',
-            input_schema: {
+            parameters: {
                 type: 'object',
                 properties: {},
                 required: []
@@ -213,7 +213,7 @@ export class TerminalToolsService {
         {
             name: 'focus_terminal',
             description: '切换到指定索引的终端，使其成为活动终端。',
-            input_schema: {
+            parameters: {
                 type: 'object',
                 properties: {
                     terminal_index: {
@@ -246,7 +246,7 @@ export class TerminalToolsService {
         const mcpTools = this.mcpManager.getAllToolsWithPrefix().map(tool => ({
             name: tool.name,
             description: tool.description,
-            input_schema: tool.inputSchema
+            parameters: tool.inputSchema
         }));
 
         // 合并内置工具和 MCP 工具
