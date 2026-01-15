@@ -57,6 +57,7 @@
                                 {{ t.providers[field.key] || field.label }}
                                 <span *ngIf="isRequired(field)" class="required">*</span>
                             </label>
+                            <!-- 文本和密码输入框 -->
                             <div class="input-with-toggle" *ngIf="configs[providerName] && (getFieldType(field) === 'text' || getFieldType(field) === 'password')">
                                 <input
                                     [type]="isPasswordField(field) && !isPasswordVisible(providerName, field.key) ? 'password' : 'text'"
@@ -70,6 +71,25 @@
                                         (click)="togglePasswordVisibility(providerName, field.key)">
                                     <i class="fa" [ngClass]="isPasswordVisible(providerName, field.key) ? 'fa-eye-slash' : 'fa-eye'"></i>
                                 </button>
+                            </div>
+                            <!-- 数字输入框 -->
+                            <div *ngIf="configs[providerName] && getFieldType(field) === 'number'">
+                                <input
+                                    type="number"
+                                    class="form-control"
+                                    [placeholder]="field.placeholder || ''"
+                                    [(ngModel)]="configs[providerName][field.key]">
+                            </div>
+                            <!-- 复选框 -->
+                            <div *ngIf="configs[providerName] && getFieldType(field) === 'checkbox'" class="checkbox-group">
+                                <div class="toggle-switch">
+                                    <input type="checkbox"
+                                           [id]="providerName + '-' + field.key"
+                                           [(ngModel)]="configs[providerName][field.key]">
+                                    <label [for]="providerName + '-' + field.key">
+                                        {{ field.placeholder || '' }}
+                                    </label>
+                                </div>
                             </div>
                             <!-- API Key 验证提示 -->
                             <div *ngIf="field.key === 'apiKey' && configs[providerName]?.[field.key]"

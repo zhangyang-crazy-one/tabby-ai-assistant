@@ -35,6 +35,7 @@ export interface ProviderConfig {
     authConfig?: AuthConfig;
     enabled?: boolean;
     contextWindow?: number;  // 供应商上下文窗口限制
+    disableStreaming?: boolean;  // 禁用流式响应（用于不支持流式的 OpenAI 兼容站点）
 }
 
 // 提供商默认配置

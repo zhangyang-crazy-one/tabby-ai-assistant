@@ -84,6 +84,18 @@ export class ProviderConfigComponent implements OnInit, OnDestroy {
                 { key: 'model', label: 'Model', type: 'text', default: 'glm-4', required: false, placeholder: '例如: glm-4, glm-4-air, glm-4-flash' },
                 { key: 'contextWindow', label: '上下文限制', type: 'number', default: 128000, required: false, placeholder: 'GLM-4: 128000' }
             ]
+        },
+        'openai-compatible': {
+            name: 'OpenAI 兼容站点',
+            description: '支持 OpenAI API 格式的第三方服务（如 DeepSeek、OneAPI 等）',
+            icon: 'fa-plug',
+            fields: [
+                { key: 'apiKey', label: 'API Key', type: 'password', required: true },
+                { key: 'baseURL', label: 'Base URL', type: 'text', default: '', required: true, placeholder: '例如: https://api.deepseek.com/v1' },
+                { key: 'model', label: 'Model', type: 'text', default: '', required: true, placeholder: '例如: deepseek-chat, gpt-3.5-turbo' },
+                { key: 'disableStreaming', label: '禁用流式响应', type: 'checkbox', default: false, required: false, placeholder: '如果站点不支持流式响应，请勾选此项' },
+                { key: 'contextWindow', label: '上下文限制', type: 'number', default: 128000, required: false, placeholder: '根据模型设置' }
+            ]
         }
     };
 
