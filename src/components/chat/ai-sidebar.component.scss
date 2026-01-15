@@ -7,6 +7,47 @@
     width: 100%;
 }
 
+// ============================================
+// Titlebar - 品牌标题栏（可拖拽区域）
+// ============================================
+.ai-sidebar-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;  // 靠右对齐，避开 macOS 红绿灯
+    height: 32px;  // Windows/Linux 默认高度
+    min-height: 32px;
+    padding-right: 12px;
+    background: var(--ai-bg-tertiary, #252525);
+    border-bottom: 1px solid var(--ai-border, #4a4a4a);
+    -webkit-app-region: drag;  // 可拖拽区域
+    user-select: none;
+    flex-shrink: 0;
+
+    // macOS 特殊高度（避开红绿灯按钮）
+    &.macos {
+        height: 38px;
+        min-height: 38px;
+    }
+
+    .titlebar-content {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .titlebar-logo {
+        color: var(--ai-primary, #4dabf7);
+        opacity: 0.9;
+    }
+
+    .titlebar-text {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--ai-text-secondary, #adb5bd);
+        letter-spacing: 0.3px;
+    }
+}
+
 .ai-sidebar-container {
     display: flex;
     flex-direction: column;

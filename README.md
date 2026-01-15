@@ -375,6 +375,13 @@ npm run clean      # 清理构建文件
 
 ### 重构记录
 
+- **v1.0.37**: 侧边栏标题栏优化 - 跨平台 UI 增强
+  - **问题修复**: macOS 系统控制按钮（红绿灯）被侧边栏遮挡
+  - **新增组件**: 品牌标题栏（AI Assistant logo + 可拖拽区域）
+  - **跨平台适配**: macOS 38px / Windows/Linux 32px 高度
+  - **UI 增强**: 统一的品牌展示，支持窗口拖拽
+  - **技术实现**: 注入 PlatformDetectionService 检测平台
+
 - **v1.0.35**: OpenAI 兼容站点流式响应修复 (Fix #5)
   - **问题修复**: Issue #5 「自定义站点一直无法对话」- 400 错误
   - **问题原因**: openai-compatible provider 强制使用 `stream: true`，部分第三方站点不支持
