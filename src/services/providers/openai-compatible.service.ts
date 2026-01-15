@@ -109,6 +109,7 @@ export class OpenAiCompatibleProviderService extends BaseAiProvider {
 
     /**
      * 流式聊天功能 - 支持工具调用事件
+     * 当 disableStreaming 配置为 true 时，使用非流式请求模拟流式响应
      */
     chatStream(request: ChatRequest): Observable<StreamEvent> {
         return new Observable<StreamEvent>((subscriber: Observer<StreamEvent>) => {
@@ -121,8 +122,44 @@ export class OpenAiCompatibleProviderService extends BaseAiProvider {
 
             const abortController = new AbortController();
 
+            // 检查是否禁用流式响应
+            const useStreaming = !this.config?.disableStreaming;
+
             const runStream = async () => {
                 try {
+                    // 如果禁用流式，使用非流式请求模拟流式响应
+                    if (!useStreaming) {
+                        this.logger.info('Streaming disabled, using non-streaming fallback');
+                        const response = await this.client!.post('/chat/completions', {
+                            model: this.config?.model || 'gpt-3.5-turbo',
+                            messages: this.transformMessages(request.messages),
+                            max_tokens: request.maxTokens || 1000,
+                            temperature: request.temperature || 0.7,
+                            stream: false
+                        });
+
+                        const content = response.data.choices?.[0]?.message?.content || '';
+                        
+                        // 模拟流式响应：一次性发送全部内容
+                        subscriber.next({
+                            type: 'text_delta',
+                            textDelta: content
+                        });
+
+                        subscriber.next({
+                            type: 'message_end',
+                            message: {
+                                id: this.generateId(),
+                                role: MessageRole.ASSISTANT,
+                                content: content,
+                                timestamp: new Date()
+                            }
+                        });
+                        subscriber.complete();
+                        return;
+                    }
+
+                    // 正常流式请求
                     const response = await this.client!.post('/chat/completions', {
                         model: this.config?.model || 'gpt-3.5-turbo',
                         messages: this.transformMessages(request.messages),
