@@ -36,7 +36,22 @@
 | **OpenAI** | `https://api.openai.com/v1` | GPT-4 | 功能全面，性能稳定 |
 | **Anthropic** | `https://api.anthropic.com` | Claude-3-Sonnet | 安全性高，推理能力强 |
 | **Minimax** | `https://api.minimaxi.com/anthropic` | MiniMax-M2 | 专为代码优化 |
-| **GLM** | `https://open.bigmodel.cn/api/anthropic` | GLM-4.6 | 中文优化 |
+| **GLM** | `https://open.bigmodel.cn/api/anthropic` | GLM-4.6 | 中文优化，支持双模式 |
+
+#### GLM 双模式支持
+
+GLM 提供商支持两种 API 格式，可根据 Base URL 自动选择：
+
+| 模式 | Base URL | 端点 | 技术实现 |
+|------|---------|------|---------|
+| **Anthropic 兼容** | `https://open.bigmodel.cn/api/anthropic` | `/v1/messages` | Anthropic SDK |
+| **OpenAI 兼容** | `https://open.bigmodel.cn/api/paas/v4` | `/chat/completions` | Axios (responseType: 'text') |
+
+**自动检测**：根据 Base URL 自动选择模式：
+- 包含 `/anthropic` → 使用 Anthropic SDK
+- 其他 → 使用 Axios (OpenAI 格式)
+
+**浏览器兼容性**：修复了 `responseType: 'stream'` 在浏览器环境中的兼容性问题。
 
 ### 本地/自托管提供商
 
@@ -44,7 +59,7 @@
 |--------|---------|---------|------|
 | **Ollama** | `http://localhost:11434/v1` | llama3.1 | 本地运行，无需API密钥 |
 | **vLLM** | `http://localhost:8000/v1` | Llama-3.1-8B | 高性能推理框架 |
-| **OpenAI Compatible** | `http://localhost:11434/v1` | gpt-3.5-turbo | 兼容LocalAI等 |
+| **OpenAI Compatible** | 自定义 | 自定义 | 兼容 DeepSeek、OneAPI 等第三方站点，支持禁用流式响应 |
 
 ## 🔌 MCP 服务器支持
 
@@ -359,6 +374,28 @@ npm run clean      # 清理构建文件
 4. 在 `ai-provider-manager.service.ts` 注册提供商
 
 ### 重构记录
+
+- **v1.0.35**: OpenAI 兼容站点流式响应修复 (Fix #5)
+  - **问题修复**: Issue #5 「自定义站点一直无法对话」- 400 错误
+  - **问题原因**: openai-compatible provider 强制使用 `stream: true`，部分第三方站点不支持
+  - **新增配置**: `disableStreaming` 配置项（禁用流式响应）
+  - **新增模板**: 设置界面添加「OpenAI 兼容站点」配置模板
+  - **新增字段类型**: 支持 checkbox 和 number 类型字段渲染
+  - **代码优化**: chatStream() 方法检测配置，自动回退非流式请求
+  - **用户指引**: 如站点不支持流式，勾选「禁用流式响应」即可
+
+- **v1.0.34**: GLM Provider 双模式支持
+  - **功能增强**: GLM 支持两种 API 格式（Anthropic 兼容 + OpenAI 兼容）
+  - **技术架构**: 根据 Base URL 自动选择实现方式
+    - `/api/anthropic` → Anthropic SDK（自动 SSE 解析）
+    - `/api/paas/v4` → Axios（responseType: 'text' + 手动解析）
+  - **问题修复**: 修复浏览器环境中 `responseType: 'stream'` 不支持的错误
+  - **核心重构**:
+    - 新增 `detectApiMode()` 方法自动检测 API 模式
+    - 新增 `chatWithAnthropicSdk()` / `chatWithAxios()` 分离两种实现
+    - 新增 `chatStreamWithAnthropicSdk()` / `chatStreamWithAxios()` 流式处理
+    - 统一响应转换方法 `transformChatResponse()` / `transformOpenAIResponse()`
+  - **收益**: 增强插件鲁棒性，支持更多 GLM API 端点配置
 
 - **v1.0.30**: 可配置的 Agent 最大轮数 (Fix #1)
   - **问题修复**: Issue #1 "达到最大轮次30轮" - 用户无法自定义最大轮数限制
