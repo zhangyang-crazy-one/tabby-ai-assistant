@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { TerminalManagerService, TerminalInfo } from './terminal-manager.service';
+import { AsyncTaskManagerService } from './async-task-manager.service';
 import { LoggerService } from '../core/logger.service';
 import { MCPClientManager } from '../mcp/mcp-client-manager.service';
 
@@ -223,6 +224,68 @@ export class TerminalToolsService {
                 },
                 required: ['terminal_index']
             }
+        },
+        // ========== 异步任务工具 ==========
+        {
+            name: 'async_terminal_command',
+            description: `【异步命令执行】用于执行可能需要较长时间的终端命令。
+调用后立即返回 task_id，命令在后台执行。
+使用 check_task_status 工具查看任务状态和输出。
+
+适用场景：
+- npm install / yarn install / pnpm install
+- 编译/构建项目 (npm run build, make, cargo build 等)
+- 部署脚本
+- 任何执行时间可能超过 10 秒的命令
+
+注意：如果命令执行时间很短（如 ls, cd, echo），请使用普通的 write_to_terminal 工具。`,
+            parameters: {
+                type: 'object',
+                properties: {
+                    command: {
+                        type: 'string',
+                        description: '要执行的命令'
+                    },
+                    terminal_index: {
+                        type: 'number',
+                        description: '目标终端索引（可选，默认使用活动终端）'
+                    },
+                    timeout_seconds: {
+                        type: 'number',
+                        description: '超时时间（秒），默认 300 秒（5分钟）'
+                    }
+                },
+                required: ['command']
+            }
+        },
+        {
+            name: 'check_task_status',
+            description: `【查询异步任务状态】获取异步命令的执行状态和输出。
+
+返回信息包括：
+- 任务状态：running/completed/failed/timeout
+- 已执行时间
+- 最新输出内容
+- 完成时的退出码（如果可获取）
+
+使用场景：
+- 在调用 async_terminal_command 后，需要检查命令是否完成
+- 获取长时间命令的中间输出
+- 确认任务成功/失败`,
+            parameters: {
+                type: 'object',
+                properties: {
+                    task_id: {
+                        type: 'string',
+                        description: '要查询的任务 ID'
+                    },
+                    full_output: {
+                        type: 'boolean',
+                        description: '是否获取完整输出，默认 false（只获取最新部分）'
+                    }
+                },
+                required: ['task_id']
+            }
         }
     ];
 
@@ -232,6 +295,7 @@ export class TerminalToolsService {
 
     constructor(
         private terminalManager: TerminalManagerService,
+        private asyncTaskManager: AsyncTaskManagerService,
         private logger: LoggerService,
         private mcpManager: MCPClientManager
     ) {
@@ -302,6 +366,53 @@ export class TerminalToolsService {
                 case 'focus_terminal':
                     result = this.focusTerminal(toolCall.input.terminal_index);
                     break;
+                // ========== 异步任务工具 ==========
+                case 'async_terminal_command': {
+                    const command = toolCall.input.command;
+                    const terminalIndex = toolCall.input.terminal_index;
+                    const timeoutSeconds = toolCall.input.timeout_seconds || 300;
+                    
+                    // 创建异步任务
+                    const task = this.asyncTaskManager.createTask({
+                        command,
+                        timeout: timeoutSeconds * 1000
+                    });
+                    
+                    result = JSON.stringify({
+                        success: true,
+                        task_id: task.taskId,
+                        message: `命令已在后台启动，请使用 check_task_status 工具查询任务状态`,
+                        command: command,
+                        timeout_seconds: timeoutSeconds
+                    }, null, 2);
+                    break;
+                }
+                case 'check_task_status': {
+                    const taskId = toolCall.input.task_id;
+                    const fullOutput = toolCall.input.full_output || false;
+                    
+                    const taskResult = this.asyncTaskManager.getTaskResult(taskId, fullOutput);
+                    
+                    if (!taskResult) {
+                        result = JSON.stringify({
+                            success: false,
+                            error: `找不到任务 ${taskId}`,
+                            hint: '任务可能已完成并被清理，或 task_id 无效'
+                        }, null, 2);
+                    } else {
+                        result = JSON.stringify({
+                            success: true,
+                            task_id: taskId,
+                            status: taskResult.status,
+                            elapsed_seconds: Math.round(taskResult.elapsedMs / 1000),
+                            output: taskResult.output,
+                            is_complete: taskResult.isComplete,
+                            exit_code: taskResult.exitCode,
+                            error: taskResult.errorMessage
+                        }, null, 2);
+                    }
+                    break;
+                }
                 default:
                     // 检查是否是 MCP 工具
                     if (toolCall.name.startsWith('mcp_')) {

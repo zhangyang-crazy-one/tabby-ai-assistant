@@ -160,6 +160,24 @@ import { PlatformDetectionService, OSType } from '../../services/platform/platfo
                                     <span>{{ block.icon }} {{ block.text }}<span *ngIf="block.rounds"> ({{ block.rounds }} 轮)</span></span>
                                 </div>
 
+                                <!-- 5. 任务总结块 (task_complete 专用) -->
+                                <div *ngIf="block.type === 'task_summary'" 
+                                     class="ai-task-summary"
+                                     [ngClass]="{
+                                         'ai-task-summary--success': block.success,
+                                         'ai-task-summary--failure': !block.success
+                                     }">
+                                    <div class="ai-task-summary__header">
+                                        <span class="ai-task-summary__icon">{{ block.success ? '✅' : '❌' }}</span>
+                                        <span class="ai-task-summary__title">{{ block.success ? '任务完成' : '任务未能完成' }}</span>
+                                    </div>
+                                    <div class="ai-task-summary__content" [innerHTML]="formatMessage(block.summary)"></div>
+                                    <div class="ai-task-summary__next-steps" *ngIf="block.nextSteps">
+                                        <span class="ai-task-summary__next-icon">💡</span>
+                                        <span [innerHTML]="formatMessage(block.nextSteps)"></span>
+                                    </div>
+                                </div>
+
                             </ng-container>
                         </ng-container>
                     </div>
@@ -651,6 +669,17 @@ export class AiSidebarComponent implements OnInit, OnDestroy, AfterViewChecked, 
                     icon: event.reasonIcon,
                     text: event.reasonText,
                     rounds: event.totalRounds
+                });
+                break;
+
+            case 'task_summary':
+                // 🎯 任务总结块（task_complete 工具专用）
+                // 不走工具卡片渲染，直接作为总结块渲染
+                message.uiBlocks.push({
+                    type: 'task_summary',
+                    success: event.success,
+                    summary: event.summary,
+                    nextSteps: event.nextSteps
                 });
                 break;
 

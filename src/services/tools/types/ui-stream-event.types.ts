@@ -21,6 +21,8 @@ export type UIEventType =
     | 'tool_error'     // 工具错误
     | 'round_divider'  // 轮次分隔线
     | 'agent_done'     // Agent 完成
+    | 'task_summary'   // 任务总结（task_complete 工具专用）
+    | 'async_task'     // 异步任务状态更新
     | 'error';         // 系统错误
 
 /**
@@ -187,6 +189,49 @@ export interface UIErrorEvent extends UIStreamEvent {
 }
 
 /**
+ * 任务总结事件（task_complete 工具专用）
+ * 特殊处理：不走工具卡片渲染，而是作为总结块直接渲染
+ */
+export interface UITaskSummaryEvent extends UIStreamEvent {
+    type: 'task_summary';
+    /** 是否成功完成 */
+    success: boolean;
+    /** 总结内容（支持 Markdown） */
+    summary: string;
+    /** 后续建议（可选） */
+    nextSteps?: string;
+}
+
+/**
+ * 异步任务状态
+ */
+export type AsyncTaskStatus =
+    | 'running'      // 执行中
+    | 'completed'    // 成功完成
+    | 'failed'       // 执行失败
+    | 'timeout';     // 超时
+
+/**
+ * 异步任务事件
+ * 用于显示长时间运行的终端命令状态
+ */
+export interface UIAsyncTaskEvent extends UIStreamEvent {
+    type: 'async_task';
+    /** 任务 ID */
+    taskId: string;
+    /** 执行的命令 */
+    command: string;
+    /** 当前状态 */
+    status: AsyncTaskStatus;
+    /** 执行时长（毫秒） */
+    duration?: number;
+    /** 输出预览（最后 N 字符） */
+    outputPreview?: string;
+    /** 错误信息 */
+    error?: string;
+}
+
+/**
  * 所有 UI 流事件的联合类型
  */
 export type AnyUIStreamEvent =
@@ -196,6 +241,8 @@ export type AnyUIStreamEvent =
     | UIToolErrorEvent
     | UIRoundDividerEvent
     | UIAgentDoneEvent
+    | UITaskSummaryEvent
+    | UIAsyncTaskEvent
     | UIErrorEvent;
 
 // ============================================================================
@@ -205,7 +252,7 @@ export type AnyUIStreamEvent =
 /**
  * UI 渲染块类型
  */
-export type UIBlockType = 'text' | 'tool' | 'divider' | 'status';
+export type UIBlockType = 'text' | 'tool' | 'divider' | 'status' | 'task_summary' | 'async_task';
 
 /**
  * 工具状态
@@ -268,13 +315,49 @@ export interface UIStatusBlock {
 }
 
 /**
+ * 任务总结渲染块（task_complete 工具专用）
+ */
+export interface UITaskSummaryBlock {
+    type: 'task_summary';
+    /** 是否成功完成 */
+    success: boolean;
+    /** 总结内容（支持 Markdown） */
+    summary: string;
+    /** 后续建议（可选） */
+    nextSteps?: string;
+}
+
+/**
+ * 异步任务渲染块
+ */
+export interface UIAsyncTaskBlock {
+    type: 'async_task';
+    /** 任务 ID */
+    taskId: string;
+    /** 执行的命令 */
+    command: string;
+    /** 当前状态 */
+    status: AsyncTaskStatus;
+    /** 执行时长（毫秒） */
+    duration?: number;
+    /** 输出预览 */
+    outputPreview?: string;
+    /** 是否展开输出 */
+    expanded?: boolean;
+    /** 错误信息 */
+    error?: string;
+}
+
+/**
  * 所有 UI 渲染块的联合类型
  */
 export type AnyUIBlock =
     | UITextBlock
     | UIToolBlock
     | UIDividerBlock
-    | UIStatusBlock;
+    | UIStatusBlock
+    | UITaskSummaryBlock
+    | UIAsyncTaskBlock;
 
 // ============================================================================
 // 常量定义

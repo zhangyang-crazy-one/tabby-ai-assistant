@@ -296,6 +296,46 @@ export interface DataSettingsTranslations {
     migrationNote: string;
 }
 
+// 代理设置
+export interface ProxyTranslations {
+    title: string;
+    networkProxy: string;
+    enableProxy: string;
+    enableProxyDesc: string;
+    importFromEnv: string;
+    importFromEnvDesc: string;
+    importSuccess: string;
+    noEnvProxy: string;
+    proxyConfig: string;
+    httpProxy: string;
+    httpProxyPlaceholder: string;
+    httpProxyHint: string;
+    httpsProxy: string;
+    httpsProxyPlaceholder: string;
+    httpsProxyHint: string;
+    noProxy: string;
+    noProxyPlaceholder: string;
+    noProxyHint: string;
+    requireAuth: string;
+    username: string;
+    password: string;
+    testConnection: string;
+    testConnectionDesc: string;
+    testingConnection: string;
+    testSuccess: string;
+    testSuccessDetail: string;
+    testFailed: string;
+    testFailedDetail: string;
+    configSaved: string;
+    noProxyUrl: string;
+    usage: string;
+    usageInfo1: string;
+    usageInfo2: string;
+    usageInfo3: string;
+    optional: string;
+    recommended: string;
+}
+
 // 主翻译类型
 export interface TranslationKeys {
     common: CommonTranslations;
@@ -311,6 +351,7 @@ export interface TranslationKeys {
     contextSettings: ContextSettingsTranslations;
     mcpSettings: MCPSettingsTranslations;
     dataSettings: DataSettingsTranslations;
+    proxy: ProxyTranslations;
 }
 
 // 支持的语言类型

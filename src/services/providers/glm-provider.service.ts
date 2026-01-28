@@ -6,6 +6,7 @@ import { BaseAiProvider } from './base-provider.service';
 import { ProviderCapability, ValidationResult } from '../../types/provider.types';
 import { ChatRequest, ChatResponse, CommandRequest, CommandResponse, ExplainRequest, ExplainResponse, AnalysisRequest, AnalysisResponse, MessageRole, StreamEvent } from '../../types/ai.types';
 import { LoggerService } from '../core/logger.service';
+import { ProxyService } from '../network/proxy.service';
 
 /**
  * GLM (ChatGLM) AI提供商
@@ -37,7 +38,10 @@ export class GlmProviderService extends BaseAiProvider {
     private anthropicClient: Anthropic | null = null;
     private axiosClient: AxiosInstance | null = null;
 
-    constructor(logger: LoggerService) {
+    constructor(
+        logger: LoggerService,
+        private proxyService: ProxyService
+    ) {
         super(logger);
     }
 
@@ -82,23 +86,28 @@ export class GlmProviderService extends BaseAiProvider {
         try {
             if (this.useAnthropicSdk) {
                 // 方案1: Anthropic SDK (用于 /api/anthropic 格式)
+                const httpAgent = this.proxyService.getFetchProxyAgent(baseURL);
                 this.anthropicClient = new Anthropic({
                     apiKey: this.config.apiKey,
-                    baseURL: baseURL
+                    baseURL: baseURL,
+                    ...(httpAgent && { httpAgent })
                 });
                 this.logger.info('GLM client initialized (Anthropic SDK)', {
                     baseURL,
-                    model: this.config.model || 'glm-4.6'
+                    model: this.config.model || 'glm-4.6',
+                    proxyEnabled: !!httpAgent
                 });
             } else {
                 // 方案2: Axios (用于 /api/paas/v4 OpenAI 格式)
+                const proxyConfig = this.proxyService.getAxiosProxyConfig(baseURL);
                 this.axiosClient = axios.create({
                     baseURL: baseURL,
                     timeout: this.getTimeout(),
                     headers: {
                         'Authorization': `Bearer ${this.config.apiKey}`,
                         'Content-Type': 'application/json'
-                    }
+                    },
+                    ...proxyConfig
                 });
 
                 // 添加请求拦截器
@@ -134,7 +143,8 @@ export class GlmProviderService extends BaseAiProvider {
 
                 this.logger.info('GLM client initialized (Axios)', {
                     baseURL,
-                    model: this.config.model || 'glm-4.6'
+                    model: this.config.model || 'glm-4.6',
+                    proxyEnabled: !!(proxyConfig.httpAgent || proxyConfig.httpsAgent)
                 });
             }
         } catch (error) {

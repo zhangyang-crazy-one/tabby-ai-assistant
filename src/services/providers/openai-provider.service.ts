@@ -5,6 +5,7 @@ import { BaseAiProvider } from './base-provider.service';
 import { ProviderCapability, ValidationResult } from '../../types/provider.types';
 import { ChatRequest, ChatResponse, CommandRequest, CommandResponse, ExplainRequest, ExplainResponse, AnalysisRequest, AnalysisResponse, MessageRole, StreamEvent } from '../../types/ai.types';
 import { LoggerService } from '../core/logger.service';
+import { ProxyService } from '../network/proxy.service';
 
 /**
  * OpenAI AI提供商
@@ -30,7 +31,10 @@ export class OpenAiProviderService extends BaseAiProvider {
 
     private client: AxiosInstance | null = null;
 
-    constructor(logger: LoggerService) {
+    constructor(
+        logger: LoggerService,
+        private proxyService: ProxyService
+    ) {
         super(logger);
     }
 
@@ -47,18 +51,23 @@ export class OpenAiProviderService extends BaseAiProvider {
         }
 
         try {
+            const baseURL = this.getBaseURL();
+            const proxyConfig = this.proxyService.getAxiosProxyConfig(baseURL);
+
             this.client = axios.create({
-                baseURL: this.getBaseURL(),
+                baseURL,
                 timeout: this.getTimeout(),
                 headers: {
                     'Authorization': `Bearer ${this.config.apiKey}`,
                     'Content-Type': 'application/json'
-                }
+                },
+                ...proxyConfig
             });
 
             this.logger.info('OpenAI client initialized', {
-                baseURL: this.getBaseURL(),
-                model: this.config.model || 'gpt-4'
+                baseURL,
+                model: this.config.model || 'gpt-4',
+                proxyEnabled: !!(proxyConfig.httpAgent || proxyConfig.httpsAgent)
             });
         } catch (error) {
             this.logger.error('Failed to initialize OpenAI client', error);

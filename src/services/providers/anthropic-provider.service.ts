@@ -5,6 +5,7 @@ import { BaseAiProvider } from './base-provider.service';
 import { ProviderCapability, ValidationResult } from '../../types/provider.types';
 import { ChatRequest, ChatResponse, CommandRequest, CommandResponse, ExplainRequest, ExplainResponse, AnalysisRequest, AnalysisResponse, MessageRole, StreamEvent } from '../../types/ai.types';
 import { LoggerService } from '../core/logger.service';
+import { ProxyService } from '../network/proxy.service';
 
 /**
  * Anthropic Claude AI提供商
@@ -30,7 +31,10 @@ export class AnthropicProviderService extends BaseAiProvider {
 
     private client: Anthropic | null = null;
 
-    constructor(logger: LoggerService) {
+    constructor(
+        logger: LoggerService,
+        private proxyService: ProxyService
+    ) {
         super(logger);
     }
 
@@ -47,14 +51,19 @@ export class AnthropicProviderService extends BaseAiProvider {
         }
 
         try {
+            const baseURL = this.getBaseURL();
+            const httpAgent = this.proxyService.getFetchProxyAgent(baseURL);
+
             this.client = new Anthropic({
                 apiKey: this.config.apiKey,
-                baseURL: this.getBaseURL()
+                baseURL,
+                ...(httpAgent && { httpAgent })
             });
 
             this.logger.info('Anthropic client initialized', {
-                baseURL: this.getBaseURL(),
-                model: this.config.model || 'claude-3-sonnet'
+                baseURL,
+                model: this.config.model || 'claude-3-sonnet',
+                proxyEnabled: !!httpAgent
             });
         } catch (error) {
             this.logger.error('Failed to initialize Anthropic client', error);

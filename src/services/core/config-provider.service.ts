@@ -5,6 +5,7 @@ import { FileStorageService } from './file-storage.service';
 import { SecurityConfig } from '../../types/security.types';
 import { ProviderConfig, PROVIDER_DEFAULTS, ProviderConfigUtils } from '../../types/provider.types';
 import { ContextConfig } from '../../types/ai.types';
+import { ProxyConfig, DEFAULT_PROXY_CONFIG } from '../../types/proxy.types';
 
 /**
  * AI助手配置
@@ -32,6 +33,9 @@ export interface AiAssistantConfig {
     };
     /** Agent 最大执行轮数 */
     agentMaxRounds: number;
+
+    /** 代理配置 */
+    proxy: ProxyConfig;
 }
 
 const DEFAULT_CONFIG: AiAssistantConfig = {
@@ -73,7 +77,8 @@ const DEFAULT_CONFIG: AiAssistantConfig = {
         compactMode: false,
         fontSize: 14
     },
-    agentMaxRounds: 50
+    agentMaxRounds: 50,
+    proxy: { ...DEFAULT_PROXY_CONFIG }
 };
 
 @Injectable({ providedIn: 'root' })
@@ -414,5 +419,31 @@ export class ConfigProviderService {
      */
     setAutoCompactEnabled(enabled: boolean): void {
         this.fileStorage.save(this.AUTO_COMPACT_FILENAME, enabled);
+    }
+
+    // ==================== 代理配置 ====================
+
+    /**
+     * 获取代理配置
+     */
+    getProxyConfig(): ProxyConfig {
+        return this.config.proxy ? { ...this.config.proxy } : { ...DEFAULT_PROXY_CONFIG };
+    }
+
+    /**
+     * 更新代理配置
+     */
+    updateProxyConfig(config: Partial<ProxyConfig>): void {
+        this.config.proxy = { ...this.config.proxy, ...config };
+        this.saveConfig();
+        this.configChange$.next({ key: 'proxy', value: this.config.proxy });
+        this.logger.info('Proxy configuration updated');
+    }
+
+    /**
+     * 检查代理是否启用
+     */
+    isProxyEnabled(): boolean {
+        return this.config.proxy?.enabled || false;
     }
 }

@@ -1,5 +1,6 @@
 import { BaseTransport } from './base-transport';
 import { MCPRequest, MCPResponse } from '../mcp-message.types';
+import { ProxyService } from '../../network/proxy.service';
 
 /**
  * Streamable HTTP 传输层实现
@@ -19,7 +20,7 @@ export class HTTPStreamTransport extends BaseTransport {
     constructor(
         private url: string,
         private headers: Record<string, string> = {},
-        private options: { timeout?: number } = {}
+        private options: { timeout?: number; proxyService?: ProxyService } = {}
     ) {
         super();
     }
@@ -110,7 +111,10 @@ export class HTTPStreamTransport extends BaseTransport {
         const timeout = this.options.timeout || 30000;
 
         try {
-            const fetchOptions: RequestInit = {
+            // 获取代理 agent
+            const agent = this.options.proxyService?.getFetchProxyAgent(this.url);
+
+            const fetchOptions: RequestInit & { agent?: any } = {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -118,7 +122,8 @@ export class HTTPStreamTransport extends BaseTransport {
                     ...this.headers
                 },
                 body: JSON.stringify(request),
-                signal: AbortSignal.timeout(timeout)
+                signal: AbortSignal.timeout(timeout),
+                ...(agent && { agent })
             };
 
             // 添加 session ID 头（如果已获取）

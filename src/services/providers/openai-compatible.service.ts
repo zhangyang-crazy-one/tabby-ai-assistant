@@ -5,6 +5,7 @@ import { BaseAiProvider } from './base-provider.service';
 import { ProviderCapability, ValidationResult } from '../../types/provider.types';
 import { ChatRequest, ChatResponse, CommandRequest, CommandResponse, ExplainRequest, ExplainResponse, AnalysisRequest, AnalysisResponse, MessageRole, StreamEvent } from '../../types/ai.types';
 import { LoggerService } from '../core/logger.service';
+import { ProxyService } from '../network/proxy.service';
 
 /**
  * OpenAI兼容AI提供商
@@ -42,7 +43,10 @@ export class OpenAiCompatibleProviderService extends BaseAiProvider {
         'local-model'
     ];
 
-    constructor(logger: LoggerService) {
+    constructor(
+        logger: LoggerService,
+        private proxyService: ProxyService
+    ) {
         super(logger);
     }
 
@@ -59,18 +63,21 @@ export class OpenAiCompatibleProviderService extends BaseAiProvider {
         }
 
         try {
+            const proxyConfig = this.proxyService.getAxiosProxyConfig(this.config.baseURL);
             this.client = axios.create({
                 baseURL: this.config.baseURL,
                 timeout: this.getTimeout(),
                 headers: {
                     'Authorization': `Bearer ${this.config.apiKey}`,
                     'Content-Type': 'application/json'
-                }
+                },
+                ...proxyConfig
             });
 
             this.logger.info('OpenAI compatible client initialized', {
                 baseURL: this.config.baseURL,
-                model: this.config.model || 'gpt-3.5-turbo'
+                model: this.config.model || 'gpt-3.5-turbo',
+                proxyEnabled: !!(proxyConfig.httpAgent || proxyConfig.httpsAgent)
             });
         } catch (error) {
             this.logger.error('Failed to initialize OpenAI compatible client', error);

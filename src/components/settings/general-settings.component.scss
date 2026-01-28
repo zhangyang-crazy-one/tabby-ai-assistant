@@ -81,6 +81,19 @@
             align-items: start;
         }
 
+        .ui-settings-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .ui-settings-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
         .form-group {
             margin-bottom: 0;
 
@@ -107,6 +120,13 @@
                     border-color: var(--ai-primary);
                     box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.15);
                 }
+            }
+
+            .form-description {
+                margin: 0.5rem 0 0 0;
+                font-size: 0.8125rem;
+                color: var(--ai-text-secondary);
+                line-height: 1.4;
             }
         }
 
@@ -187,6 +207,40 @@
                             }
                         }
                     }
+                }
+            }
+        }
+
+        .position-selector {
+            display: flex;
+            gap: 0.5rem;
+
+            .position-btn {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.5rem 1rem;
+                border: 1px solid var(--ai-border);
+                border-radius: 8px;
+                background-color: var(--ai-bg-primary);
+                color: var(--ai-text-secondary);
+                cursor: pointer;
+                transition: all 0.2s ease;
+                font-size: 0.875rem;
+
+                i {
+                    font-size: 0.875rem;
+                }
+
+                &:hover {
+                    border-color: var(--ai-primary);
+                    color: var(--ai-text-primary);
+                }
+
+                &.active {
+                    border-color: var(--ai-primary);
+                    background-color: rgba(0, 123, 255, 0.08);
+                    color: var(--ai-primary);
                 }
             }
         }
@@ -341,6 +395,11 @@
             padding: 1rem;
 
             .form-row {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .ui-settings-row {
                 grid-template-columns: 1fr;
                 gap: 1.5rem;
             }

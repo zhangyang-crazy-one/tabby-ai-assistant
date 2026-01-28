@@ -5,6 +5,7 @@ import { AiAssistantService } from '../../services/core/ai-assistant.service';
 import { ConfigProviderService } from '../../services/core/config-provider.service';
 import { LoggerService } from '../../services/core/logger.service';
 import { ThemeService, ThemeType } from '../../services/core/theme.service';
+import { AiSidebarService } from '../../services/chat/ai-sidebar.service';
 import { ConfigService } from 'tabby-core';
 import { TranslateService, SupportedLanguage } from '../../i18n';
 
@@ -22,6 +23,7 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
     isEnabled: boolean = true;
     language: string = 'zh-CN';
     theme: string = 'auto';
+    sidebarPosition: 'left' | 'right' = 'left';
 
     // 翻译对象
     t: any;
@@ -34,6 +36,11 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
     languages = [
         { value: 'zh-CN', label: '简体中文', flag: '🇨🇳' },
         { value: 'en-US', label: 'English', flag: '🇺🇸' }
+    ];
+
+    sidebarPositions = [
+        { value: 'left', label: '左侧', icon: 'fa-arrow-left' },
+        { value: 'right', label: '右侧', icon: 'fa-arrow-right' }
     ];
 
     themes = [
@@ -62,7 +69,8 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
         private tabbyConfig: ConfigService,
         private logger: LoggerService,
         private translate: TranslateService,
-        private themeService: ThemeService
+        private themeService: ThemeService,
+        private sidebarService: AiSidebarService
     ) {
         this.t = this.translate.t;
     }
@@ -110,6 +118,16 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
         this.isEnabled = this.config.isEnabled() ?? true;
         this.language = this.config.get('language', 'zh-CN') || 'zh-CN';
         this.theme = this.config.get('theme', 'auto') || 'auto';
+        this.sidebarPosition = this.sidebarService.getSidebarPosition();
+    }
+
+    /**
+     * 更新侧边栏位置
+     */
+    updateSidebarPosition(position: 'left' | 'right'): void {
+        this.sidebarPosition = position;
+        this.sidebarService.setSidebarPosition(position);
+        this.logger.info('Sidebar position updated', { position });
     }
 
     /**

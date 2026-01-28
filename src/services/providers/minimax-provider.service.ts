@@ -5,6 +5,7 @@ import { BaseAiProvider } from './base-provider.service';
 import { ProviderCapability, ValidationResult } from '../../types/provider.types';
 import { ChatRequest, ChatResponse, CommandRequest, CommandResponse, ExplainRequest, ExplainResponse, AnalysisRequest, AnalysisResponse, MessageRole, StreamEvent } from '../../types/ai.types';
 import { LoggerService } from '../core/logger.service';
+import { ProxyService } from '../network/proxy.service';
 
 /**
  * Minimax AI提供商
@@ -30,7 +31,10 @@ export class MinimaxProviderService extends BaseAiProvider {
 
     private client: Anthropic | null = null;
 
-    constructor(logger: LoggerService) {
+    constructor(
+        logger: LoggerService,
+        private proxyService: ProxyService
+    ) {
         super(logger);
     }
 
@@ -53,14 +57,19 @@ export class MinimaxProviderService extends BaseAiProvider {
         }
 
         try {
+            const baseURL = this.getBaseURL();
+            const httpAgent = this.proxyService.getFetchProxyAgent(baseURL);
+
             this.client = new Anthropic({
                 apiKey: this.config.apiKey,
-                baseURL: this.getBaseURL()
+                baseURL,
+                ...(httpAgent && { httpAgent })
             });
 
             this.logger.info('Minimax client initialized', {
-                baseURL: this.getBaseURL(),
-                model: this.config.model || 'MiniMax-M2'
+                baseURL,
+                model: this.config.model || 'MiniMax-M2',
+                proxyEnabled: !!httpAgent
             });
         } catch (error) {
             this.logger.error('Failed to initialize Minimax client', error);

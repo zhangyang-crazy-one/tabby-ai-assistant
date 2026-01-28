@@ -1,0 +1,5 @@
+select disk 5  
+clean  
+create partition primary  
+format fs=ntfs quick label="USB-Drive"  
+assign letter=L 

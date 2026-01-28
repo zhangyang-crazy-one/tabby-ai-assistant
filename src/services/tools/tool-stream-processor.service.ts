@@ -8,6 +8,7 @@ import {
     UIToolErrorEvent,
     UIRoundDividerEvent,
     UIAgentDoneEvent,
+    UITaskSummaryEvent,
     AgentDoneReason
 } from './types/ui-stream-event.types';
 import { AgentStreamEvent, ChatRequest, AgentLoopConfig } from '../../types/ai.types';
@@ -257,6 +258,21 @@ export class ToolStreamProcessorService {
         if (!event.toolCall || !this.uiEventSubject) return;
 
         const { id, name } = event.toolCall;
+        
+        // 🎯 特殊处理：task_complete 工具不显示"执行中"卡片
+        // 它会在 processToolComplete 中直接渲染为总结块
+        if (name === 'task_complete') {
+            // 仍然记录状态，但不发送 UI 事件
+            this.activeToolCalls.set(id, {
+                id,
+                name,
+                displayName: '任务完成',
+                startTime: timestamp,
+                category: 'system'
+            });
+            return;
+        }
+        
         const displayName = this.formatter.getToolDisplayName(name);
         const category = this.formatter.getToolCategory(name);
         const icon = this.formatter.getToolIcon(name);
@@ -289,8 +305,29 @@ export class ToolStreamProcessorService {
     private processToolComplete(event: AgentStreamEvent, timestamp: number): void {
         if (!event.toolCall || !event.toolResult || !this.uiEventSubject) return;
 
-        const { id, name } = event.toolCall;
+        const { id, name, input } = event.toolCall;
         const { content, is_error, duration } = event.toolResult;
+
+        // 🎯 特殊处理：task_complete 工具
+        // 不走工具卡片渲染，而是作为总结块直接渲染
+        if (name === 'task_complete') {
+            const taskInput = input || {};
+            
+            const summaryEvent: UITaskSummaryEvent = {
+                type: 'task_summary',
+                timestamp,
+                success: taskInput.success ?? !is_error,
+                summary: taskInput.summary || content || '任务已完成',
+                nextSteps: taskInput.next_steps
+            };
+            
+            this.uiEventSubject.next(summaryEvent);
+            
+            // 清理状态
+            this.activeToolCalls.delete(id);
+            this.logger.info('task_complete rendered as summary block', { success: summaryEvent.success });
+            return;  // 不走正常的工具完成流程
+        }
 
         // 获取工具状态
         const toolState = this.activeToolCalls.get(id);

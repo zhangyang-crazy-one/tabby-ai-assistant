@@ -148,11 +148,34 @@ export class AiSidebarService {
     }
 
     /**
+     * 获取 sidebar 位置
+     */
+    getSidebarPosition(): 'left' | 'right' {
+        const pluginConfig = this.getPluginConfig();
+        return pluginConfig.position || 'left';
+    }
+
+    /**
+     * 设置 sidebar 位置
+     */
+    setSidebarPosition(position: 'left' | 'right'): void {
+        const pluginConfig = this.getPluginConfig();
+        pluginConfig.position = position;
+        this.savePluginConfig(pluginConfig);
+        
+        // 如果 sidebar 正在显示，重新创建以应用新位置
+        if (this._isVisible) {
+            this.destroySidebar();
+            this.createSidebar();
+        }
+    }
+
+    /**
      * 创建 sidebar 组件
      * 
      * 使用固定定位方案：
-     * 1. 侧边栏 position: fixed，固定在左侧
-     * 2. 主内容区通过 margin-left 推开
+     * 1. 侧边栏 position: fixed，固定在左侧或右侧
+     * 2. 主内容区通过 margin 推开
      * 这样不改变任何现有元素的 flex 布局
      */
     private createSidebar(): void {
@@ -179,22 +202,24 @@ export class AiSidebarService {
         const wrapper = document.createElement('div');
         wrapper.className = 'ai-sidebar-wrapper';
 
-        // 加载保存的宽度或使用默认值
+        // 加载保存的宽度和位置
         this.currentWidth = this.loadSidebarWidth();
+        const position = this.getSidebarPosition();
+        const isRight = position === 'right';
 
         // 获取视口高度 - 使用绝对像素值确保滚动容器正确计算
         const viewportHeight = window.innerHeight;
         wrapper.style.cssText = `
             position: fixed;
-            left: 0;
+            ${isRight ? 'right' : 'left'}: 0;
             top: 0;
             width: ${this.currentWidth}px;
             height: ${viewportHeight}px;
             display: flex;
             flex-direction: column;
             background: var(--bs-body-bg, #1e1e1e);
-            border-right: 1px solid var(--bs-border-color, #333);
-            box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+            border-${isRight ? 'left' : 'right'}: 1px solid var(--bs-border-color, #333);
+            box-shadow: ${isRight ? '-2px' : '2px'} 0 10px rgba(0,0,0,0.3);
             z-index: 1000;
             overflow: hidden;
         `;
@@ -210,10 +235,12 @@ export class AiSidebarService {
         // 创建 resize handle（拖动条）
         const resizeHandle = document.createElement('div');
         resizeHandle.className = 'ai-sidebar-resize-handle';
+        // 根据位置调整 resize handle 的位置
+        const handlePosition = isRight ? 'left: -4px;' : 'right: -4px;';
         resizeHandle.style.cssText = `
             position: absolute;
             top: 0;
-            right: -4px;
+            ${handlePosition}
             width: 8px;
             height: 100%;
             cursor: ew-resize;
@@ -316,22 +343,91 @@ export class AiSidebarService {
     }
 
     /**
-     * 注入布局 CSS - 使用 margin-left 把主内容推开
+     * 注入布局 CSS - 使用 margin 把主内容推开
      *
-     * 固定定位方案：侧边栏 fixed，主内容区 margin-left
+     * 固定定位方案：侧边栏 fixed，主内容区 margin
+     * 
+     * 修复：只推开内容区，不影响标题栏/标签栏
+     * 支持左右位置
      */
     private injectLayoutCSS(): void {
+        const position = this.getSidebarPosition();
+        const isRight = position === 'right';
+        const marginProp = isRight ? 'margin-right' : 'margin-left';
+        
         const style = document.createElement('style');
         style.id = 'ai-sidebar-layout-css';
         style.textContent = `
-            /* 用 margin-left 把 app-root 推开，为侧边栏腾出空间 */
+            /* 用 margin 把主内容区推开，为侧边栏腾出空间 */
+            /* 针对 Tabby 的布局结构：只影响 .content 区域，不影响 tab-bar */
+            app-root > .content,
+            app-root > app-title-bar + .content,
+            app-root > .tab-bar + .content,
+            app-root > .layout > .content,
+            body > app-root > .content {
+                ${marginProp}: ${this.currentWidth}px !important;
+            }
+            
+            /* 确保 tab-bar 和 title-bar 不被推开 */
+            app-root > .tab-bar,
+            app-root > app-title-bar,
+            app-root > .title-bar,
+            app-root > [class*="tab"],
+            app-root > [class*="title"] {
+                ${marginProp}: 0 !important;
+            }
+            
+            /* 备用方案：如果上述选择器不生效，使用 transform 位移 */
             app-root {
-                margin-left: ${this.currentWidth}px !important;
+                position: relative;
             }
         `;
 
         document.head.appendChild(style);
         this.styleElement = style;
+        
+        // 同时尝试直接调整 DOM 元素的样式（更可靠）
+        this.adjustMainContentMargin(true);
+    }
+    
+    /**
+     * 调整主内容区的 margin
+     */
+    private adjustMainContentMargin(apply: boolean): void {
+        const appRoot = document.querySelector('app-root');
+        if (!appRoot) return;
+        
+        const position = this.getSidebarPosition();
+        const isRight = position === 'right';
+        const marginProp = isRight ? 'marginRight' : 'marginLeft';
+        
+        // 查找主内容区（通常是 .content 或 main 元素）
+        // 排除 tab-bar、title-bar 等顶部元素
+        const children = Array.from(appRoot.children);
+        
+        for (const child of children) {
+            const tagName = child.tagName.toLowerCase();
+            const className = child.className || '';
+            
+            // 跳过标签栏、标题栏等顶部元素
+            if (tagName.includes('tab') || 
+                tagName.includes('title') ||
+                className.includes('tab') || 
+                className.includes('title') ||
+                tagName === 'ai-sidebar-wrapper') {
+                continue;
+            }
+            
+            // 给主内容区添加 margin
+            const el = child as HTMLElement;
+            if (apply) {
+                (el.style as any)[marginProp] = `${this.currentWidth}px`;
+                el.style.transition = `${isRight ? 'margin-right' : 'margin-left'} 0.2s ease`;
+            } else {
+                (el.style as any)[marginProp] = '';
+                el.style.transition = '';
+            }
+        }
     }
 
     /**
@@ -342,6 +438,9 @@ export class AiSidebarService {
             this.styleElement.remove();
             this.styleElement = null;
         }
+        
+        // 同时移除直接设置的样式
+        this.adjustMainContentMargin(false);
     }
 
     /**
@@ -398,13 +497,38 @@ export class AiSidebarService {
      * 更新布局 CSS（resize 时调用）
      */
     private updateLayoutCSS(width: number): void {
+        const position = this.getSidebarPosition();
+        const isRight = position === 'right';
+        const marginProp = isRight ? 'margin-right' : 'margin-left';
+        
         if (this.styleElement) {
             this.styleElement.textContent = `
+                /* 用 margin 把主内容区推开，为侧边栏腾出空间 */
+                app-root > .content,
+                app-root > app-title-bar + .content,
+                app-root > .tab-bar + .content,
+                app-root > .layout > .content,
+                body > app-root > .content {
+                    ${marginProp}: ${width}px !important;
+                }
+                
+                /* 确保 tab-bar 和 title-bar 不被推开 */
+                app-root > .tab-bar,
+                app-root > app-title-bar,
+                app-root > .title-bar,
+                app-root > [class*="tab"],
+                app-root > [class*="title"] {
+                    ${marginProp}: 0 !important;
+                }
+                
                 app-root {
-                    margin-left: ${width}px !important;
+                    position: relative;
                 }
             `;
         }
+        
+        // 同时更新直接设置的样式
+        this.adjustMainContentMargin(true);
     }
 
     /**

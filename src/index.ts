@@ -20,6 +20,9 @@ import { AiProviderManagerService } from './services/core/ai-provider-manager.se
 import { ConfigProviderService } from './services/core/config-provider.service';
 import { LoggerService } from './services/core/logger.service';
 
+// Network Services
+import { ProxyService } from './services/network/proxy.service';
+
 // Providers
 import { BaseAiProvider } from './services/providers/base-provider.service';
 import { OpenAiProviderService } from './services/providers/openai-provider.service';
@@ -44,6 +47,7 @@ import { AiSidebarService } from './services/chat/ai-sidebar.service';
 
 // Terminal Services
 import { TerminalManagerService } from './services/terminal/terminal-manager.service';
+import { AsyncTaskManagerService } from './services/terminal/async-task-manager.service';
 
 // Context Engineering Services
 import { ContextManager } from './services/context/manager';
@@ -81,6 +85,7 @@ import { GeneralSettingsComponent } from './components/settings/general-settings
 import { ContextSettingsComponent } from './components/settings/context-settings.component';
 import { DataSettingsComponent } from './components/settings/data-settings.component';
 import { MCPSettingsComponent } from './components/settings/mcp-settings.component';
+import { ProxySettingsComponent } from './components/settings/proxy-settings.component';
 
 import { RiskConfirmDialogComponent } from './components/security/risk-confirm-dialog.component';
 import { PasswordPromptComponent } from './components/security/password-prompt.component';
@@ -117,6 +122,9 @@ import { AiHotkeyProvider } from './providers/tabby/ai-hotkey.provider';
         // i18n Services
         TranslateService,
 
+        // Network Services
+        ProxyService,
+
         // AI Providers
         OpenAiProviderService,
         AnthropicProviderService,
@@ -140,6 +148,7 @@ import { AiHotkeyProvider } from './providers/tabby/ai-hotkey.provider';
 
         // Terminal Services
         TerminalManagerService,
+        AsyncTaskManagerService,
 
         // Context Engineering Services
         ContextManager,
@@ -187,6 +196,7 @@ import { AiHotkeyProvider } from './providers/tabby/ai-hotkey.provider';
         ContextSettingsComponent,
         DataSettingsComponent,
         MCPSettingsComponent,
+        ProxySettingsComponent,
 
         // Security Components
         RiskConfirmDialogComponent,

@@ -41,7 +41,8 @@
              [attr.data-tab]="tab.id"
              (click)="switchTab(tab.id)">
             <i [class]="tab.icon"></i>
-            <span>{{ t.settings?.[tab.labelKey.split('.')[1]] || tab.labelKey }}</span>
+            <span *ngIf="tab.id === 'proxy'">{{ t.proxy?.title || '代理设置' }}</span>
+            <span *ngIf="tab.id !== 'proxy'">{{ t.settings?.[tab.labelKey.split('.')[1]] || tab.labelKey }}</span>
         </div>
     </div>
 
@@ -82,6 +83,11 @@
         <!-- 数据管理设置 -->
         <div *ngIf="activeTab === 'data'" class="tab-content">
             <app-data-settings></app-data-settings>
+        </div>
+
+        <!-- 代理设置 -->
+        <div *ngIf="activeTab === 'proxy'" class="tab-content">
+            <app-proxy-settings></app-proxy-settings>
         </div>
 
         <!-- 高级设置 -->

@@ -760,6 +760,252 @@
     }
 }
 
+// ============================================
+// Task Summary Block - task_complete 工具专用渲染
+// 不走卡片渲染，直接作为总结块显示
+// ============================================
+.ai-task-summary {
+    margin: 20px 0;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border-left: 4px solid var(--ai-border, #4a4a4a);
+    background: rgba(255, 255, 255, 0.02);
+    transition: all 0.3s ease;
+
+    // 成功状态
+    &--success {
+        border-left-color: #22c55e;
+        background: rgba(34, 197, 94, 0.05);
+
+        .ai-task-summary__title {
+            color: #22c55e;
+        }
+    }
+
+    // 失败状态
+    &--failure {
+        border-left-color: #ef4444;
+        background: rgba(239, 68, 68, 0.05);
+
+        .ai-task-summary__title {
+            color: #ef4444;
+        }
+    }
+
+    // 头部区域
+    &__header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    &__icon {
+        font-size: 16px;
+        line-height: 1;
+    }
+
+    &__title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--ai-text-primary, #f8f9fa);
+    }
+
+    // 内容区域
+    &__content {
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--ai-text-primary, #f8f9fa);
+
+        p {
+            margin: 0 0 8px 0;
+
+            &:last-child {
+                margin-bottom: 0;
+            }
+        }
+
+        ul, ol {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        li {
+            margin: 4px 0;
+        }
+
+        code {
+            background: var(--ai-bg-tertiary, #3d3d3d);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', 'Consolas', monospace;
+            font-size: 13px;
+        }
+    }
+
+    // 下一步建议区域
+    &__next-steps {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--ai-border, #4a4a4a);
+        font-size: 13px;
+        color: var(--ai-text-secondary, #adb5bd);
+
+        .ai-task-summary__next-icon {
+            font-size: 14px;
+            line-height: 1.5;
+            flex-shrink: 0;
+        }
+
+        p {
+            margin: 0;
+        }
+    }
+}
+
+// ============================================
+// Async Task Card - 异步任务卡片样式
+// ============================================
+.ai-async-task {
+    margin: 12px 0;
+    padding: 0;
+    border-radius: 8px;
+    border: 1px solid var(--ai-border, #4a4a4a);
+    overflow: hidden;
+    background: var(--ai-bg-tertiary, #3d3d3d);
+
+    // 头部区域
+    &__header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        background: rgba(0, 0, 0, 0.15);
+        border-bottom: 1px solid var(--ai-border, #4a4a4a);
+    }
+
+    &__icon {
+        font-size: 14px;
+        line-height: 1;
+    }
+
+    &__title {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--ai-primary, #4dabf7);
+        flex: 1;
+    }
+
+    &__task-id {
+        font-size: 11px;
+        font-family: 'Courier New', 'Consolas', monospace;
+        color: var(--ai-text-secondary, #adb5bd);
+        background: rgba(0, 0, 0, 0.2);
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+
+    // 状态区域
+    &__status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        font-size: 12px;
+        color: var(--ai-text-secondary, #adb5bd);
+    }
+
+    &__status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--ai-text-secondary, #adb5bd);
+
+        &--running {
+            background: var(--ai-warning, #fcc419);
+            animation: pulse 1.5s infinite;
+        }
+
+        &--completed {
+            background: var(--ai-success, #51cf66);
+        }
+
+        &--failed {
+            background: var(--ai-danger, #ff6b6b);
+        }
+    }
+
+    // 命令预览
+    &__command {
+        padding: 8px 12px;
+        background: rgba(0, 0, 0, 0.1);
+        font-family: 'Courier New', 'Consolas', monospace;
+        font-size: 12px;
+        color: var(--ai-text-primary, #f8f9fa);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    // 输出区域
+    &__output {
+        padding: 8px 12px;
+
+        .output-header {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--ai-text-secondary, #adb5bd);
+            margin-bottom: 4px;
+        }
+
+        .output-content {
+            margin: 0;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+            font-size: 12px;
+            overflow-x: auto;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: var(--ai-text-primary, #f8f9fa);
+        }
+    }
+
+    // 不同状态的样式变化
+    &--running {
+        border-color: var(--ai-warning, #fcc419);
+
+        .ai-async-task__header {
+            background: rgba(252, 196, 25, 0.1);
+        }
+    }
+
+    &--completed {
+        border-color: var(--ai-success, #51cf66);
+
+        .ai-async-task__header {
+            background: rgba(81, 207, 102, 0.1);
+        }
+    }
+
+    &--failed {
+        border-color: var(--ai-danger, #ff6b6b);
+
+        .ai-async-task__header {
+            background: rgba(255, 107, 107, 0.1);
+        }
+
+        .output-content {
+            color: var(--ai-danger, #ff6b6b);
+        }
+    }
+}
+
 // Responsive
 @media (max-width: 768px) {
     .ai-sidebar-header {

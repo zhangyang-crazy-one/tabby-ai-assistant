@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewEncapsulation } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FileStorageService } from '../../services/core/file-storage.service';
@@ -9,6 +9,7 @@ import { ConfigProviderService } from '../../services/core/config-provider.servi
 import { ConsentManagerService } from '../../services/security/consent-manager.service';
 import { LoggerService } from '../../services/core/logger.service';
 import { ToastService } from '../../services/core/toast.service';
+import { TranslateService } from '../../i18n';
 
 /**
  * 数据文件信息
@@ -27,284 +28,625 @@ export interface DataFileInfo {
     selector: 'app-data-settings',
     template: `
         <div class="data-settings">
-            <h3>{{ 'settings.dataManagement.title' | translate }}</h3>
-            <p class="description">{{ 'settings.dataManagement.description' | translate }}</p>
+            <div class="section-header">
+                <i class="fa fa-database"></i>
+                <h3>{{ t?.dataSettings?.title || '数据管理' }}</h3>
+            </div>
+            <p class="description">{{ t?.dataSettings?.description || '管理插件的数据存储，包括聊天记录、记忆和配置' }}</p>
 
-            <!-- 数据位置 -->
-            <div class="data-location">
-                <div class="info-row">
-                    <label>{{ 'settings.dataManagement.storageLocation' | translate }}:</label>
-                    <code>{{ dataDirectory }}</code>
+            <!-- 数据位置卡片 -->
+            <div class="location-card">
+                <div class="card-icon">
+                    <i class="fa fa-hdd-o"></i>
                 </div>
-                <button class="btn btn-secondary" (click)="openDataDirectory()">
-                    <span class="icon">📂</span>
-                    {{ 'settings.dataManagement.openDirectory' | translate }}
+                <div class="card-content">
+                    <div class="card-title">{{ t?.dataSettings?.storageLocation || '存储位置' }}</div>
+                    <div class="card-value">
+                        <code>{{ dataDirectory }}</code>
+                    </div>
+                </div>
+                <button class="btn btn-outline" (click)="openDataDirectory()">
+                    <i class="fa fa-folder-open"></i>
+                    {{ t?.dataSettings?.openDirectory || '打开目录' }}
                 </button>
             </div>
 
-            <!-- 存储文件列表 -->
-            <div class="data-files">
-                <h4>{{ 'settings.dataManagement.storedFiles' | translate }}</h4>
-                <table class="files-table" *ngIf="dataFiles.length > 0">
-                    <thead>
-                        <tr>
-                            <th>{{ 'settings.dataManagement.fileName' | translate }}</th>
-                            <th>{{ 'settings.dataManagement.size' | translate }}</th>
-                            <th>{{ 'settings.dataManagement.lastModified' | translate }}</th>
-                            <th>{{ 'settings.dataManagement.actions' | translate }}</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr *ngFor="let file of dataFiles">
-                            <td>
-                                <span class="file-icon">📄</span>
-                                {{ file.name }}
-                            </td>
-                            <td>{{ formatFileSize(file.size) }}</td>
-                            <td>{{ file.modified | date:'medium' }}</td>
-                            <td class="actions">
-                                <button class="btn btn-small" (click)="viewFile(file)">
-                                    {{ 'settings.dataManagement.view' | translate }}
-                                </button>
-                                <button class="btn btn-small btn-danger" (click)="deleteFile(file)">
-                                    {{ 'settings.dataManagement.delete' | translate }}
-                                </button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                <p *ngIf="dataFiles.length === 0" class="no-files">
-                    {{ 'settings.dataManagement.noFiles' | translate }}
-                </p>
-            </div>
-
-            <!-- 数据统计 -->
-            <div class="data-statistics">
-                <h4>{{ 'settings.dataManagement.statistics' | translate }}</h4>
+            <!-- 数据统计区域 -->
+            <div class="stats-section">
+                <h4 class="section-subtitle">
+                    <i class="fa fa-chart-bar"></i>
+                    {{ t?.dataSettings?.statistics || '数据统计' }}
+                </h4>
                 <div class="stats-grid">
-                    <div class="stat-item">
-                        <span class="stat-value">{{ statistics.totalSessions }}</span>
-                        <span class="stat-label">{{ 'settings.dataManagement.chatSessions' | translate }}</span>
+                    <div class="stat-card" (click)="showFileType('sessions')">
+                        <div class="stat-icon sessions">
+                            <i class="fa fa-comments"></i>
+                        </div>
+                        <div class="stat-details">
+                            <span class="stat-number">{{ statistics.totalSessions }}</span>
+                            <span class="stat-text">{{ t?.dataSettings?.chatSessions || '聊天会话' }}</span>
+                        </div>
                     </div>
-                    <div class="stat-item">
-                        <span class="stat-value">{{ statistics.totalMemories }}</span>
-                        <span class="stat-label">{{ 'settings.dataManagement.memoryItems' | translate }}</span>
+                    <div class="stat-card" (click)="showFileType('memories')">
+                        <div class="stat-icon memories">
+                            <i class="fa fa-brain"></i>
+                        </div>
+                        <div class="stat-details">
+                            <span class="stat-number">{{ statistics.totalMemories }}</span>
+                            <span class="stat-text">{{ t?.dataSettings?.memoryItems || '记忆项' }}</span>
+                        </div>
                     </div>
-                    <div class="stat-item">
-                        <span class="stat-value">{{ statistics.totalCheckpoints }}</span>
-                        <span class="stat-label">{{ 'settings.dataManagement.checkpoints' | translate }}</span>
+                    <div class="stat-card" (click)="showFileType('checkpoints')">
+                        <div class="stat-icon checkpoints">
+                            <i class="fa fa-save"></i>
+                        </div>
+                        <div class="stat-details">
+                            <span class="stat-number">{{ statistics.totalCheckpoints }}</span>
+                            <span class="stat-text">{{ t?.dataSettings?.checkpoints || '检查点' }}</span>
+                        </div>
                     </div>
-                    <div class="stat-item">
-                        <span class="stat-value">{{ statistics.totalConsents }}</span>
-                        <span class="stat-label">{{ 'settings.dataManagement.consents' | translate }}</span>
+                    <div class="stat-card" (click)="showFileType('consents')">
+                        <div class="stat-icon consents">
+                            <i class="fa fa-shield-alt"></i>
+                        </div>
+                        <div class="stat-details">
+                            <span class="stat-number">{{ statistics.totalConsents }}</span>
+                            <span class="stat-text">{{ t?.dataSettings?.consents || '授权记录' }}</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- 操作按钮 -->
-            <div class="data-actions">
-                <h4>{{ 'settings.dataManagement.actions' | translate }}</h4>
-                <div class="button-group">
-                    <button class="btn btn-primary" (click)="exportAllData()">
-                        <span class="icon">📤</span>
-                        {{ 'settings.dataManagement.exportAll' | translate }}
-                    </button>
-                    <button class="btn btn-secondary" (click)="importData()">
-                        <span class="icon">📥</span>
-                        {{ 'settings.dataManagement.importData' | translate }}
-                    </button>
-                    <button class="btn btn-warning" (click)="migrateFromLocalStorage()">
-                        <span class="icon">🔄</span>
-                        {{ 'settings.dataManagement.migrateData' | translate }}
-                    </button>
-                    <button class="btn btn-danger" (click)="clearAllData()">
-                        <span class="icon">🗑️</span>
-                        {{ 'settings.dataManagement.clearAll' | translate }}
-                    </button>
+            <!-- 存储文件列表 -->
+            <div class="files-section">
+                <div class="section-header-inline">
+                    <h4 class="section-subtitle">
+                        <i class="fa fa-file-alt"></i>
+                        {{ t?.dataSettings?.storedFiles || '存储文件' }}
+                    </h4>
+                    <div class="files-actions">
+                        <button class="btn-action" (click)="exportAllData()" title="{{ t?.dataSettings?.exportAll || '导出所有' }}">
+                            <i class="fa fa-file-export"></i>
+                            <span>{{ t?.dataSettings?.exportAll || '导出所有' }}</span>
+                        </button>
+                        <button class="btn-action" (click)="importData()" title="{{ t?.dataSettings?.importData || '导入数据' }}">
+                            <i class="fa fa-file-import"></i>
+                            <span>{{ t?.dataSettings?.importData || '导入' }}</span>
+                        </button>
+                        <button class="btn-action" (click)="migrateFromLocalStorage()" title="{{ t?.dataSettings?.migrateData || '迁移数据' }}">
+                            <i class="fa fa-sync"></i>
+                            <span>{{ t?.dataSettings?.migrateData || '迁移' }}</span>
+                        </button>
+                        <button class="btn-action danger" (click)="clearAllData()" title="{{ t?.dataSettings?.clearAll || '清除所有' }}">
+                            <i class="fa fa-trash-alt"></i>
+                            <span>{{ t?.dataSettings?.clearAll || '清除' }}</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="files-table-container" *ngIf="dataFiles.length > 0">
+                    <table class="files-table">
+                        <thead>
+                            <tr>
+                                <th class="col-name">
+                                    <i class="fa fa-file-code"></i>
+                                    {{ t?.dataSettings?.fileName || '文件名' }}
+                                </th>
+                                <th class="col-size">
+                                    <i class="fa fa-expand"></i>
+                                    {{ t?.dataSettings?.size || '大小' }}
+                                </th>
+                                <th class="col-date">
+                                    <i class="fa fa-calendar-alt"></i>
+                                    {{ t?.dataSettings?.lastModified || '修改时间' }}
+                                </th>
+                                <th class="col-actions">
+                                    <i class="fa fa-cog"></i>
+                                    {{ t?.dataSettings?.actions || '操作' }}
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr *ngFor="let file of dataFiles; let i = index" [class.row-animate]="true" [style.animation-delay]="i * 50 + 'ms'">
+                                <td class="cell-name">
+                                    <i class="fa fa-file-alt file-icon"></i>
+                                    <span class="file-name">{{ file.name }}</span>
+                                </td>
+                                <td class="cell-size">
+                                    <span class="size-badge">{{ formatFileSize(file.size) }}</span>
+                                </td>
+                                <td class="cell-date">
+                                    <span class="date-text">{{ file.modified | date:'yyyy-MM-dd HH:mm' }}</span>
+                                </td>
+                                <td class="cell-actions">
+                                    <button class="btn-action-sm" (click)="viewFile(file)" title="{{ t?.common?.view || '查看' }}">
+                                        <i class="fa fa-eye"></i>
+                                    </button>
+                                    <button class="btn-action-sm danger" (click)="deleteFile(file)" title="{{ t?.common?.delete || '删除' }}">
+                                        <i class="fa fa-trash-alt"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="empty-state" *ngIf="dataFiles.length === 0">
+                    <div class="empty-icon">
+                        <i class="fa fa-folder-open"></i>
+                    </div>
+                    <p class="empty-text">{{ t?.dataSettings?.noFiles || '暂无数据文件' }}</p>
+                    <p class="empty-hint">导入数据或迁移浏览器存储后即可在此查看</p>
                 </div>
             </div>
 
             <!-- 数据迁移提示 -->
-            <div class="migration-note" *ngIf="needsMigration">
-                <div class="note-content">
-                    <span class="icon">⚠️</span>
-                    <p>{{ 'settings.dataManagement.migrationNote' | translate }}</p>
+            <div class="migration-alert" *ngIf="needsMigration">
+                <div class="alert-icon">
+                    <i class="fa fa-exclamation-triangle"></i>
                 </div>
+                <div class="alert-content">
+                    <p class="alert-title">检测到旧数据</p>
+                    <p class="alert-text">{{ t?.dataSettings?.migrationNote || '浏览器存储中还有旧数据，建议点击"迁移"将数据迁移到文件存储' }}</p>
+                </div>
+                <button class="btn btn-warning" (click)="migrateFromLocalStorage()">
+                    <i class="fa fa-sync"></i>
+                    {{ t?.dataSettings?.migrateData || '立即迁移' }}
+                </button>
             </div>
         </div>
     `,
     styles: [`
+        /* 基础布局 */
         .data-settings {
-            padding: 20px;
+            padding: 0;
+            max-width: 100%;
         }
 
-        .data-settings h3 {
-            margin-bottom: 8px;
-            color: var(--text-primary);
-        }
-
-        .description {
-            color: var(--text-secondary);
-            margin-bottom: 20px;
-        }
-
-        .data-location {
-            background: var(--background-secondary);
-            padding: 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-
-        .info-row {
+        /* 标题区域 */
+        .section-header {
             display: flex;
             align-items: center;
             gap: 12px;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--ai-border);
         }
 
-        .info-row label {
-            font-weight: 500;
-            color: var(--text-secondary);
+        .section-header i {
+            font-size: 1.4rem;
+            color: var(--ai-primary);
         }
 
-        .info-row code {
-            background: var(--background-tertiary);
+        .section-header h3 {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--ai-text-primary);
+        }
+
+        .description {
+            color: var(--ai-text-secondary);
+            margin: 0 0 20px 0;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        /* 位置卡片 */
+        .location-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: linear-gradient(135deg, var(--ai-bg-secondary) 0%, var(--ai-bg-tertiary) 100%);
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            border: 1px solid var(--ai-border);
+            transition: all 0.3s ease;
+        }
+
+        .location-card:hover {
+            border-color: var(--ai-primary);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(74, 158, 255, 0.15);
+            border-radius: 12px;
+            font-size: 1.3rem;
+            color: #4a9eff;
+        }
+
+        .card-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .card-title {
+            font-size: 0.8rem;
+            color: var(--ai-text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .card-value {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .card-value code {
+            font-family: 'SF Mono', 'Consolas', monospace;
+            font-size: 0.85rem;
+            color: var(--ai-text-primary);
+            background: var(--ai-bg-primary);
             padding: 4px 8px;
             border-radius: 4px;
-            font-family: monospace;
-            font-size: 12px;
-            color: var(--text-primary);
         }
 
-        .data-files {
+        /* 统计区域 */
+        .stats-section {
+            margin-bottom: 24px;
+        }
+
+        .section-subtitle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0 0 12px 0;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--ai-text-primary);
+        }
+
+        .section-subtitle i {
+            color: var(--ai-primary);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        .stat-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: var(--ai-bg-secondary);
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid var(--ai-border);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--ai-primary);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .stat-icon {
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            font-size: 1.1rem;
+        }
+
+        .stat-icon.sessions {
+            background: linear-gradient(135deg, rgba(74, 158, 255, 0.2) 0%, rgba(74, 158, 255, 0.1) 100%);
+            color: #4a9eff;
+        }
+
+        .stat-icon.memories {
+            background: linear-gradient(135deg, rgba(192, 132, 252, 0.2) 0%, rgba(192, 132, 252, 0.1) 100%);
+            color: #c084fc;
+        }
+
+        .stat-icon.checkpoints {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.1) 100%);
+            color: #10b981;
+        }
+
+        .stat-icon.consents {
+            background: linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(251, 191, 36, 0.1) 100%);
+            color: #fbbf24;
+        }
+
+        .stat-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-number {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--ai-text-primary);
+            line-height: 1.2;
+        }
+
+        .stat-text {
+            font-size: 0.75rem;
+            color: var(--ai-text-secondary);
+        }
+
+        /* 文件区域 */
+        .files-section {
+            background: var(--ai-bg-secondary);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--ai-border);
             margin-bottom: 20px;
         }
 
-        .data-files h4 {
-            margin-bottom: 12px;
-            color: var(--text-primary);
+        .section-header-inline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px;
+            background: var(--ai-bg-tertiary);
+            border-bottom: 1px solid var(--ai-border);
+        }
+
+        .section-header-inline .section-subtitle {
+            margin: 0;
+        }
+
+        .files-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: var(--ai-bg-secondary);
+            border: 1px solid var(--ai-border);
+            border-radius: 6px;
+            color: var(--ai-text-secondary);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-action i {
+            font-size: 0.9rem;
+        }
+
+        .btn-action:hover {
+            background: var(--ai-primary);
+            border-color: var(--ai-primary);
+            color: white;
+        }
+
+        .btn-action.danger:hover {
+            background: #ef4444;
+            border-color: #ef4444;
+        }
+
+        /* 文件表格 */
+        .files-table-container {
+            overflow-x: auto;
         }
 
         .files-table {
             width: 100%;
             border-collapse: collapse;
-            background: var(--background-secondary);
-            border-radius: 8px;
-            overflow: hidden;
-        }
-
-        .files-table th,
-        .files-table td {
-            padding: 12px 16px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
+            min-width: 600px;
         }
 
         .files-table th {
-            background: var(--background-tertiary);
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 0.75rem;
             font-weight: 600;
-            color: var(--text-secondary);
+            color: var(--ai-text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: var(--ai-bg-tertiary);
+            border-bottom: 1px solid var(--ai-border);
+        }
+
+        .files-table th i {
+            margin-right: 6px;
+            font-size: 0.85rem;
+            color: var(--ai-primary);
         }
 
         .files-table td {
-            color: var(--text-primary);
+            padding: 12px 16px;
+            font-size: 0.875rem;
+            color: var(--ai-text-primary);
+            border-bottom: 1px solid var(--ai-border);
+            vertical-align: middle;
         }
 
-        .files-table tr:last-child td {
+        .files-table tbody tr {
+            transition: background 0.2s ease;
+        }
+
+        .files-table tbody tr:hover {
+            background: rgba(74, 158, 255, 0.05);
+        }
+
+        .files-table tbody tr:last-child td {
             border-bottom: none;
         }
 
-        .file-icon {
-            margin-right: 8px;
-        }
-
-        .actions {
+        .cell-name {
             display: flex;
-            gap: 8px;
-        }
-
-        .no-files {
-            text-align: center;
-            color: var(--text-secondary);
-            padding: 20px;
-            background: var(--background-secondary);
-            border-radius: 8px;
-        }
-
-        .data-statistics {
-            margin-bottom: 20px;
-        }
-
-        .data-statistics h4 {
-            margin-bottom: 12px;
-            color: var(--text-primary);
-        }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 16px;
-        }
-
-        .stat-item {
-            background: var(--background-secondary);
-            padding: 16px;
-            border-radius: 8px;
-            text-align: center;
-        }
-
-        .stat-value {
-            display: block;
-            font-size: 24px;
-            font-weight: bold;
-            color: var(--primary);
-            margin-bottom: 4px;
-        }
-
-        .stat-label {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .data-actions h4 {
-            margin-bottom: 12px;
-            color: var(--text-primary);
-        }
-
-        .button-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-        }
-
-        .btn {
-            display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
-            border: none;
-            border-radius: 6px;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.2s;
+            gap: 10px;
         }
 
-        .btn-primary {
-            background: var(--primary);
+        .file-icon {
+            color: var(--ai-primary);
+            font-size: 1rem;
+        }
+
+        .file-name {
+            font-family: 'SF Mono', 'Consolas', monospace;
+            font-size: 0.85rem;
+        }
+
+        .size-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: var(--ai-bg-tertiary);
+            border-radius: 4px;
+            font-size: 0.8rem;
+            color: var(--ai-text-secondary);
+        }
+
+        .date-text {
+            font-size: 0.85rem;
+            color: var(--ai-text-secondary);
+        }
+
+        .cell-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-action-sm {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: 1px solid var(--ai-border);
+            border-radius: 6px;
+            color: var(--ai-text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-action-sm:hover {
+            background: var(--ai-primary);
+            border-color: var(--ai-primary);
             color: white;
         }
 
-        .btn-primary:hover {
-            background: var(--primary-hover);
+        .btn-action-sm.danger:hover {
+            background: #ef4444;
+            border-color: #ef4444;
         }
 
-        .btn-secondary {
-            background: var(--background-tertiary);
-            color: var(--text-primary);
+        /* 空状态 */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 48px 24px;
+            text-align: center;
         }
 
-        .btn-secondary:hover {
-            background: var(--border-color);
+        .empty-icon {
+            width: 64px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--ai-bg-tertiary);
+            border-radius: 50%;
+            margin-bottom: 16px;
+            font-size: 1.5rem;
+            color: var(--ai-text-secondary);
+            opacity: 0.6;
+        }
+
+        .empty-text {
+            margin: 0 0 8px 0;
+            font-size: 1rem;
+            color: var(--ai-text-primary);
+        }
+
+        .empty-hint {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--ai-text-secondary);
+        }
+
+        /* 迁移提示 */
+        .migration-alert {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(245, 158, 11, 0.05) 100%);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .alert-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(245, 158, 11, 0.2);
+            border-radius: 10px;
+            font-size: 1.2rem;
+            color: #f59e0b;
+        }
+
+        .alert-content {
+            flex: 1;
+        }
+
+        .alert-title {
+            margin: 0 0 4px 0;
+            font-weight: 600;
+            color: #f59e0b;
+        }
+
+        .alert-text {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--ai-text-secondary);
+        }
+
+        /* 按钮样式 */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn i {
+            font-size: 0.9rem;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--ai-border);
+            color: var(--ai-text-primary);
+        }
+
+        .btn-outline:hover {
+            background: var(--ai-primary);
+            border-color: var(--ai-primary);
+            color: white;
         }
 
         .btn-warning {
@@ -316,48 +658,66 @@ export interface DataFileInfo {
             background: #d97706;
         }
 
-        .btn-danger {
-            background: #ef4444;
-            color: white;
+        /* 响应式 */
+        @media (max-width: 900px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .location-card {
+                flex-wrap: wrap;
+            }
+
+            .location-card .btn {
+                width: 100%;
+                justify-content: center;
+                margin-top: 12px;
+            }
         }
 
-        .btn-danger:hover {
-            background: #dc2626;
+        @media (max-width: 600px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .section-header-inline {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+
+            .files-actions {
+                width: 100%;
+                flex-wrap: wrap;
+            }
+
+            .btn-action span {
+                display: none;
+            }
+
+            .btn-action {
+                padding: 8px;
+            }
         }
 
-        .btn-small {
-            padding: 6px 12px;
-            font-size: 12px;
+        /* 动画 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
-        .btn-danger.btn-small {
-            background: var(--danger);
+        .row-animate {
+            animation: fadeInUp 0.3s ease forwards;
+            opacity: 0;
         }
-
-        .migration-note {
-            margin-top: 20px;
-            padding: 16px;
-            background: #fef3c7;
-            border-radius: 8px;
-            border-left: 4px solid #f59e0b;
-        }
-
-        .note-content {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-        }
-
-        .note-content .icon {
-            font-size: 20px;
-        }
-
-        .note-content p {
-            margin: 0;
-            color: #92400e;
-            font-size: 14px;
-        }
-    `]
+    `],
+    encapsulation: ViewEncapsulation.None
 })
 export class DataSettingsComponent implements OnInit, OnDestroy {
     private destroy$ = new Subject<void>();
@@ -620,5 +980,14 @@ export class DataSettingsComponent implements OnInit, OnDestroy {
         const sizes = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    /**
+     * 显示指定类型的数据文件
+     * 点击统计卡片时调用，用于筛选显示对应的文件
+     */
+    showFileType(type: string): void {
+        // 目前仅作为交互反馈，后续可扩展筛选功能
+        this.logger.debug('Show file type', { type });
     }
 }

@@ -19,7 +19,7 @@ export interface ChatMessage {
     metadata?: Record<string, any>;
     // UI 渲染块（用于结构化渲染工具调用）
     uiBlocks?: Array<{
-        type: 'text' | 'tool' | 'divider' | 'status';
+        type: 'text' | 'tool' | 'divider' | 'status' | 'task_summary' | 'async_task';
         id?: string;
         name?: string;
         icon?: string;
@@ -39,6 +39,15 @@ export interface ChatMessage {
         text?: string;
         detail?: string;
         rounds?: number;
+        // task_summary 专用字段
+        success?: boolean;
+        summary?: string;
+        nextSteps?: string;
+        // async_task 专用字段
+        taskId?: string;
+        command?: string;
+        outputPreview?: string;
+        expanded?: boolean;
     }>;
     // 工具调用相关字段（用于 Agent 循环和消息转换）
     toolCalls?: Array<{

@@ -16,6 +16,7 @@ import { HTTPStreamTransport } from './transports/http-transport';
 import { LoggerService } from '../core/logger.service';
 import { FileStorageService } from '../core/file-storage.service';
 import { ToastService } from '../core/toast.service';
+import { ProxyService } from '../network/proxy.service';
 
 /**
  * MCP 客户端接口
@@ -86,7 +87,8 @@ export class MCPClientManager implements OnDestroy {
     constructor(
         private logger: LoggerService,
         private fileStorage: FileStorageService,
-        private toast: ToastService
+        private toast: ToastService,
+        private proxyService: ProxyService
     ) {
         // 延迟加载已配置的服务器
         this.loadServerConfigs();
@@ -595,7 +597,10 @@ export class MCPClientManager implements OnDestroy {
                 return new SSETransport(config.url!, config.headers);
 
             case 'streamable-http':
-                return new HTTPStreamTransport(config.url!, config.headers);
+                return new HTTPStreamTransport(config.url!, config.headers, {
+                    timeout: config.timeout || 30000,
+                    proxyService: this.proxyService
+                });
 
             default:
                 throw new Error(`Unknown transport type: ${config.transport}`);

@@ -8,7 +8,7 @@
 /* 头部 */
 .settings-header {
     padding: 1.5rem;
-    background-color: var(--ai-bg-secondary);
+    background: linear-gradient(135deg, var(--ai-bg-secondary) 0%, var(--ai-bg-primary) 100%);
     border-bottom: 1px solid var(--ai-border);
     display: flex;
     align-items: center;
@@ -18,52 +18,42 @@
         flex: 1;
 
         h2 {
-            margin: 0 0 0.75rem 0;
+            margin: 0 0 0.5rem 0;
             font-size: 1.5rem;
             font-weight: 600;
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.75rem;
             color: var(--ai-text-primary);
 
-            .icon-robot {
-                font-size: 1.75rem;
+            i {
+                color: var(--ai-primary);
+                font-size: 1.5rem;
             }
         }
 
         .header-status {
             display: flex;
-            gap: 1.5rem;
-            flex-wrap: wrap;
-
-            .status-indicator,
-            .provider-info {
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-                font-size: 0.875rem;
-
-                .icon-power {
-                    font-size: 1rem;
-                }
-            }
+            gap: 1rem;
 
             .status-indicator {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.35rem 0.75rem;
+                background: var(--ai-bg-tertiary);
+                border-radius: 1rem;
+                font-size: 0.8rem;
+                color: var(--ai-text-secondary);
+
                 &.enabled {
                     color: var(--ai-success);
-
-                    .icon-power {
-                        animation: pulse 2s infinite;
-                    }
+                    background: rgba(16, 185, 129, 0.1);
                 }
 
-                &:not(.enabled) {
-                    color: var(--ai-text-secondary);
+                i {
+                    font-size: 0.85rem;
                 }
-            }
-
-            .provider-info {
-                color: var(--ai-text-secondary);
             }
         }
     }
@@ -73,10 +63,10 @@
         gap: 0.5rem;
 
         .btn-icon {
-            width: 40px;
-            height: 40px;
+            width: 38px;
+            height: 38px;
             border: none;
-            background: transparent;
+            background: var(--ai-bg-tertiary);
             border-radius: 0.5rem;
             display: flex;
             align-items: center;
@@ -86,12 +76,13 @@
             color: var(--ai-text-secondary);
 
             &:hover {
-                background-color: var(--ai-border);
-                color: var(--ai-text-primary);
+                background: var(--ai-primary);
+                color: white;
+                transform: translateY(-1px);
             }
 
-            .icon-refresh {
-                animation: spin 2s linear infinite;
+            i {
+                font-size: 1rem;
             }
         }
     }
