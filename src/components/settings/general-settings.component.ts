@@ -38,19 +38,23 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
         { value: 'en-US', label: 'English', flag: '🇺🇸' }
     ];
 
-    sidebarPositions = [
-        { value: 'left', label: '左侧', icon: 'fa-arrow-left' },
-        { value: 'right', label: '右侧', icon: 'fa-arrow-right' }
-    ];
+    get sidebarPositions() {
+        return [
+            { value: 'left', label: this.t?.general?.sidebarPositionLeft || '左侧', icon: 'fa-arrow-left' },
+            { value: 'right', label: this.t?.general?.sidebarPositionRight || '右侧', icon: 'fa-arrow-right' }
+        ];
+    }
 
-    themes = [
-        { value: 'auto', label: '跟随系统' },
-        { value: 'light', label: '浅色主题' },
-        { value: 'dark', label: '深色主题' },
-        { value: 'pixel', label: '像素复古' },
-        { value: 'tech', label: '赛博科技' },
-        { value: 'parchment', label: '羊皮卷' }
-    ];
+    get themes() {
+        return [
+            { value: 'auto', label: this.t?.general?.themeAuto || '跟随系统' },
+            { value: 'light', label: this.t?.general?.themeLight || '浅色主题' },
+            { value: 'dark', label: this.t?.general?.themeDark || '深色主题' },
+            { value: 'pixel', label: this.t?.general?.themePixel || '像素复古' },
+            { value: 'tech', label: this.t?.general?.themeTech || '赛博科技' },
+            { value: 'parchment', label: this.t?.general?.themeParchment || '羊皮卷' }
+        ];
+    }
 
     // 提供商模板，用于显示名称
     private providerNames: { [key: string]: string } = {
@@ -81,8 +85,6 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
             takeUntil(this.destroy$)
         ).subscribe(translation => {
             this.t = translation;
-            // 更新主题翻译
-            this.updateThemeLabels();
         });
 
         this.loadSettings();
@@ -94,20 +96,6 @@ export class GeneralSettingsComponent implements OnInit, OnDestroy {
     ngOnDestroy(): void {
         this.destroy$.next();
         this.destroy$.complete();
-    }
-
-    /**
-     * 更新主题标签翻译
-     */
-    private updateThemeLabels(): void {
-        this.themes = [
-            { value: 'auto', label: this.t.general.themeAuto },
-            { value: 'light', label: this.t.general.themeLight },
-            { value: 'dark', label: this.t.general.themeDark },
-            { value: 'pixel', label: this.t.general.themePixel || '像素复古' },
-            { value: 'tech', label: this.t.general.themeTech || '赛博科技' },
-            { value: 'parchment', label: this.t.general.themeParchment || '羊皮卷' }
-        ];
     }
 
     /**

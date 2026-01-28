@@ -54,6 +54,10 @@ export interface GeneralTranslations {
     themePixel: string;
     themeTech: string;
     themeParchment: string;
+    sidebarPosition: string;
+    sidebarPositionLeft: string;
+    sidebarPositionRight: string;
+    sidebarPositionDesc: string;
     shortcuts: string;
     shortcutOpenChat: string;
     shortcutOpenChatDesc: string;
