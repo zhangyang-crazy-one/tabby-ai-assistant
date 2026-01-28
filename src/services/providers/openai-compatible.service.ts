@@ -6,6 +6,7 @@ import { ProviderCapability, ValidationResult } from '../../types/provider.types
 import { ChatRequest, ChatResponse, CommandRequest, CommandResponse, ExplainRequest, ExplainResponse, AnalysisRequest, AnalysisResponse, MessageRole, StreamEvent } from '../../types/ai.types';
 import { LoggerService } from '../core/logger.service';
 import { ProxyService } from '../network/proxy.service';
+import { TranslateService } from '../../i18n';
 
 /**
  * OpenAI兼容AI提供商
@@ -45,9 +46,10 @@ export class OpenAiCompatibleProviderService extends BaseAiProvider {
 
     constructor(
         logger: LoggerService,
+        translate: TranslateService,
         private proxyService: ProxyService
     ) {
-        super(logger);
+        super(logger, translate);
     }
 
     configure(config: any): void {

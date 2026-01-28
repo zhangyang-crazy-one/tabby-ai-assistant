@@ -4,6 +4,7 @@ import { BaseAiProvider } from './base-provider.service';
 import { ProviderCapability, ValidationResult } from '../../types/provider.types';
 import { ChatRequest, ChatResponse, StreamEvent, MessageRole, CommandRequest, CommandResponse, ExplainRequest, ExplainResponse, AnalysisRequest, AnalysisResponse } from '../../types/ai.types';
 import { LoggerService } from '../core/logger.service';
+import { TranslateService } from '../../i18n';
 
 /**
  * Ollama 本地 AI 提供商
@@ -24,8 +25,11 @@ export class OllamaProviderService extends BaseAiProvider {
         credentials: {}
     };
 
-    constructor(logger: LoggerService) {
-        super(logger);
+    constructor(
+        logger: LoggerService,
+        translate: TranslateService
+    ) {
+        super(logger, translate);
     }
 
     /**

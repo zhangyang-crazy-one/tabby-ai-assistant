@@ -336,6 +336,12 @@ export interface ProxyTranslations {
     recommended: string;
 }
 
+// AI 系统提示
+export interface SystemPromptsTranslations {
+    assistantRole: string;
+    commandGeneratorRole: string;
+}
+
 // 主翻译类型
 export interface TranslationKeys {
     common: CommonTranslations;
@@ -352,6 +358,7 @@ export interface TranslationKeys {
     mcpSettings: MCPSettingsTranslations;
     dataSettings: DataSettingsTranslations;
     proxy: ProxyTranslations;
+    systemPrompts: SystemPromptsTranslations;
 }
 
 // 支持的语言类型

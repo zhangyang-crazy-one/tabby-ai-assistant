@@ -7,6 +7,7 @@ import { AiAssistantService } from '../core/ai-assistant.service';
 import { TerminalContextService } from '../terminal/terminal-context.service';
 import { SecurityValidatorService } from '../security/security-validator.service';
 import { LoggerService } from '../core/logger.service';
+import { TranslateService } from '../../i18n';
 
 @Injectable({ providedIn: 'root' })
 export class CommandGeneratorService {
@@ -14,7 +15,8 @@ export class CommandGeneratorService {
         private aiService: AiAssistantService,
         private terminalContext: TerminalContextService,
         private securityValidator: SecurityValidatorService,
-        private logger: LoggerService
+        private logger: LoggerService,
+        private translate: TranslateService
     ) {}
 
     /**
@@ -235,16 +237,16 @@ export class CommandGeneratorService {
      * 获取系统提示词
      */
     private getSystemPrompt(): string {
-        return `你是一个专业的终端命令生成助手。你的任务是：
+        return this.translate.t.systemPrompts?.commandGeneratorRole || `You are a professional terminal command generation assistant. Your task is to:
 
-1. 将自然语言描述转换为准确、高效的终端命令
-2. 考虑当前操作系统和Shell环境
-3. 优先使用安全、最佳实践的命令
-4. 提供清晰的命令解释
-5. 考虑当前工作目录和上下文环境
+1. Convert natural language descriptions into accurate, efficient terminal commands
+2. Consider current operating system and Shell environment
+3. Prioritize safe, best-practice commands
+4. Provide clear command explanations
+5. Consider current working directory and context
 
-请始终返回有效的命令，避免危险操作（如删除系统文件、格式化磁盘等）。
-如果无法确定准确的命令，请明确说明并提供替代方案。`;
+Always return valid commands, avoid dangerous operations (e.g., deleting system files, formatting disks).
+If unable to determine accurate command, clearly state and provide alternatives.`;
     }
 
     /**
