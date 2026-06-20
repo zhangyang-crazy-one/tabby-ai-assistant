@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/zhangyang-crazy-one-tabby-ai-assistant-badge.png)](https://mseep.ai/app/zhangyang-crazy-one-tabby-ai-assistant)
+
 # Tabby AI Assistant Plugin
 
 一个强大的Tabby终端AI助手插件，支持多AI提供商，提供智能命令生成、解释和安全验证功能。
