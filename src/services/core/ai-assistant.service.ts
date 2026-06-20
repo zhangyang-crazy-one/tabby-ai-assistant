@@ -1065,10 +1065,11 @@ export class AiAssistantService {
         });
 
         // 配置参数
-        const maxRounds = config.maxRounds || 15;
+        const maxRounds = config.maxRounds || 10;
         const timeoutMs = config.timeoutMs || 120000;  // 默认 2 分钟
         const repeatThreshold = config.repeatThreshold || 5;  // 重复调用阈值（提高到 5，避免正常多次调用被误判）
         const failureThreshold = config.failureThreshold || 2;  // 连续失败阈值
+        const agentLoopEnabled = config.agentLoopEnabled !== false;  // 默认为 true
 
         const callbacks = {
             onRoundStart: config.onRoundStart,
@@ -1103,6 +1104,19 @@ export class AiAssistantService {
             // 递归执行单轮对话
             const runSingleRound = async (): Promise<void> => {
                 if (!agentState.isActive) return;
+
+                // === 硬性最大轮数检查 ===
+                if (agentState.currentRound >= maxRounds) {
+                    this.logger.info(`Hard max rounds (${maxRounds}) reached, terminating`);
+                    subscriber.next({
+                        type: 'agent_complete',
+                        reason: 'max_rounds',
+                        totalRounds: agentState.currentRound,
+                        terminationMessage: `已达到最大执行轮数 (${maxRounds})`
+                    });
+                    subscriber.complete();
+                    return;
+                }
 
                 agentState.currentRound++;
 
@@ -1336,6 +1350,19 @@ export class AiAssistantService {
                                     }
 
                                     // 继续下一轮（添加递归安全保护）
+                                    if (!agentLoopEnabled) {
+                                        this.logger.info('Agent loop disabled, terminating after tool execution');
+                                        subscriber.next({
+                                            type: 'agent_complete',
+                                            reason: 'loop_disabled',
+                                            totalRounds: agentState.currentRound,
+                                            terminationMessage: 'Agent 循环已关闭，单轮模式完成'
+                                        });
+                                        callbacks.onAgentComplete?.('loop_disabled', agentState.currentRound);
+                                        subscriber.complete();
+                                        resolve();
+                                        return;
+                                    }
                                     try {
                                         await runSingleRound();
                                     } catch (recursionError) {
@@ -1350,6 +1377,18 @@ export class AiAssistantService {
                                     // 没有工具调用
                                     // 如果 checkTermination 返回 shouldTerminate: false（检测到未完成暗示），继续下一轮
                                     if (!termination.shouldTerminate) {
+                                        if (!agentLoopEnabled) {
+                                            this.logger.info('Agent loop disabled, terminating after incomplete hint');
+                                            subscriber.next({
+                                                type: 'agent_complete',
+                                                reason: 'loop_disabled',
+                                                totalRounds: agentState.currentRound,
+                                                terminationMessage: 'Agent 循环已关闭，单轮模式完成'
+                                            });
+                                            subscriber.complete();
+                                            resolve();
+                                            return;
+                                        }
                                         this.logger.info(`No tools but incomplete hint detected (${termination.reason}), continuing to next round`);
                                         try {
                                             await runSingleRound();
@@ -1765,142 +1804,26 @@ export class AiAssistantService {
     // 预编译的正则表达式（静态缓存）
     // ============================================================================
 
-    // 未完成暗示模式
+    // 未完成暗示模式（精简版本 — 减少误判）
+    // 只有当 AI 明确表达「还要继续执行」时才判断为未完成
+    // 普通的礼貌用语（"让我为您查看一下"）不再触发循环
     private static readonly INCOMPLETE_PATTERNS: RegExp[] = [
-        // 中文模式
-        /现在.{0,6}(为您|帮您|给您|查看|执行|检查)/,       // 现在为您、现在继续为您
-        /继续.{0,4}(为您|帮您|查看|执行|检查|获取)/,       // 继续为您、继续查看
-        /(让我|我来|我将|我会).{0,6}(查看|执行|检查|获取|点击|打开|选择)/, // 让我查看、让我点击
-        /(正在|开始|准备).{0,4}(执行|查看|检查|获取)/,     // 正在执行、开始查看
-        /(接下来|然后|之后|随后).{0,4}(将|会|要)/,         // 接下来将、然后会
-        /(马上|立即|即将|稍后|待会).{0,4}(为您|执行|查看)/, // 马上为您、即将执行
-        /首先.{0,8}(然后|接着|之后)/,                      // 首先...然后
-        /(第一步|下一步|接下来)/,                          // 步骤指示
-        /(帮您|为您|给您).{0,4}(查看|执行|检查|获取|操作)/, // 帮您查看、为您执行
-        /(我需要|需要).{0,4}(查看|执行|检查|获取)/,         // 我需要查看
-        /(先|首先|第一).{0,4}(看看|检查|执行)/,             // 先看看、首先检查
-        /下面.{0,4}(将|会|要|是)/,                         // 下面将、下面是
-        /(等一下|稍等|请稍候)/,                             // 等待提示
-        // === 新增：MCP 和工具相关模式 ===
-        /(让我|我来|我将|我会).{0,30}(使用|调用|执行|查询|访问|点击|打开|选择|滚动|输入)/,  // 浏览器操作
-        /使用.{0,20}(工具|MCP|浏览器).*?(查询|访问|获取)/,        // 使用工具模式
-        /(MCP|mcp).{0,15}(工具|浏览器|服务|server)/i,            // MCP 相关操作
-        /访问.{0,15}(官网|网站|URL|链接|网址)/,                   // 访问网站
-        /(查询|获取|搜索).{0,10}(信息|数据|结果|推荐)/,           // 查询信息
-        /浏览器.{0,10}(工具|访问|打开)/,                          // 浏览器操作
-        /(下一步|接下来|然后).{0,15}(使用|调用|执行|查询)/,       // 步骤预告（更宽）
-        /现在.{0,15}(重新|继续|使用|调用|执行|让我|查询|获取|搜索)/, // 现在使用/查询（含重新）
-        // === 新增：重新/继续/再次类模式（高优先级） ===
-        /重新.{0,10}(查询|搜索|获取|执行|尝试|加载|刷新)/,        // 重新查询、重新搜索
-        /继续.{0,10}(查询|搜索|获取|执行|尝试)/,                  // 继续查询
-        /再次.{0,10}(查询|搜索|获取|执行|尝试)/,                  // 再次执行
-        /再.{0,6}(查一下|看一下|执行|获取)/,                      // 再查一下、再执行
-        /还有.{0,10}(需要|要|可以)/,                              // 还有需要
-        /另外.{0,10}(需要|要|可以)/,                              // 另外还需要
-        /让我再.{0,10}/,                                          // 让我再看看
-        /我再.{0,10}/,                                            // 我再查询一下
-        /我再.{0,10}(次|一下)/,                                   // 我再一次
-        /再试.{0,6}/,                                             // 再试一次
-        /尝试.{0,10}(查询|搜索|执行|获取)/,                       // 尝试查询
-        /看看能否.{0,10}/,                                        // 看看能否
-        /检查一下.{0,10}/,                                        // 检查一下
-        /确认.{0,10}(是否|有没有)/,                               // 确认一下
-        /试.{0,6}(着|一下|看)/,                                   // 试一下、试试
-        /查.{0,6}(看|一下|询)/,                                   // 查查看
-        /查一下.{0,10}/,                                          // 查一下
-        /获取.{0,10}(更多|其他、最新)/,                           // 获取更多信息
-        /查看.{0,10}(更多|其他|详情)/,                            // 查看更多
-        /然后.{0,15}(查询|搜索|获取|执行)/,                       // 然后查询
-        /接下来.{0,15}(查询|搜索|获取|执行)/,                     // 接下来查询
-        /现在重新/,                                               // 现在重新（通用）
-        /继续执行/,                                               // 继续执行
-        /再次执行/,                                               // 再次执行
-        /重新加载/,                                               // 重新加载
-        /刷新.{0,6}/,                                             // 刷新页面等
-        // 英文模式
-        /\b(let me|i('ll| will| am going to))\b/i,
-        /\b(now i|first i|next i)\b/i,
-        /\b(going to|about to|starting to|ready to|prepared to)\b/i,  // 扩展：ready to, prepared to
-        /\b(will now|shall now|let's)\b/i,
-        /\b(proceed(ing)? to|continu(e|ing) to)\b/i,
-        /\b(executing|running|checking|fetching)\b/i,
-        /\b(step \d|first,?|next,?|then,?)\b/i,
-        /\b(wait(ing)?|hold on|stand by|just a moment)\b/i,  // 扩展：stand by, just a moment
-        /\b(i need to|i have to)\b/i,
-        /\b(looking (at|into|for))\b/i,
-        // === 新增：英文浏览器操作动词 ===
-        /\b(click(ing)?|open(ing)?|select(ing)?)\b/i,
-        /\b(scroll(ing)?|type|typing|input(ting)?)\b/i,
-        /\b(navigat(e|ing)|brows(e|ing))\b/i,
-        /\b(submit(ting)?|enter(ing)?)\b/i,
-        // === 新增：英文重试/再次类模式（高优先级） ===
-        /\bagain\b/i,                                           // try again
-        /\b(re)?try(ing)?\b/i,                                  // retry, trying
-        /\b(re)?search(ing)?\b/i,                               // research, searching
-        /\b(re)?visit(ing)?\b/i,                                // revisit
-        /\b(re)?fresh(ing)?\b/i,                                // refresh
-        /\b(re)?load(ing)?\b/i,                                 // reload
-        /\b(another|one more|once more)\b/i,                    // one more time
-        /\b(second|next) (try|time)\b/i,                        // second try
-        // === 新增：英文意图执行类模式 ===
-        /\blet me try\b/i,
-        /\bI('ll| will) try\b/i,
-        /\bI('m| am) going to try\b/i,
-        /\bneed to (try|check|search|find)\b/i,
-        /\bhave to (try|check|search|find)\b/i,
-        /\bshould (try|check|search|find)\b/i,
-        /\bshould try\b/i,
-        /\bmust (try|check|search|find)\b/i,
-        /\btry to (find|get|check|search)\b/i,
-        /\battempt(ing)? to\b/i,
-        /\bwork on\b/i,
-        /\bhandle this\b/i,
-        /\bdeal with\b/i,
-        /\btake care of\b/i,
-        /\bprocess(ing)?\b/i,
-        /\bmanag(e|ing)?\b/i,
-        /\bexecut(e|ion|ing)\b/i,
-        /\bproceed\b/i,
-        /\bcontinu(e|ing)\b/i,
-        /\bfollow up\b/i,
-        /\blook into\b/i,
-        /\binvestigat(e|ing)?\b/i,
-        /\bexplor(e|ing)?\b/i,
-        /\bcheck (on|for|into)\b/i,
-        /\bverify\b/i,
-        /\bvalidat(e|ing)?\b/i,
-        /\bconfirm(ing)?\b/i,
-        /\bfetch(ing)?\b/i,
-        /\bretriev(e|ing|al)?\b/i,
-        /\bquer(y|ies|ing)\b/i,
-        /\brequest(ing)?\b/i,
-        /\bobtain(ing)?\b/i,
-        /\bacquir(e|ing)?\b/i,
-        /\bconsult(ing)?\b/i,
-        /\brefer(ring)? to\b/i,
-        /\bexamin(e|ing)?\b/i,
-        /\binspect(ing)?\b/i,
-        /\breview(ing)?\b/i,
-        /\bmonitor(ing)?\b/i,
-        /\btrack(ing)?\b/i,
-        /\bwatch(ing)?\b/i,
-        /\bwait(ing)? for\b/i,
-        /\bon it\b/i,
-        /\bto do\b/i,
-        // === 新增：中文"好的/没问题，我来"类模式 ===
-        /好的.?([，,]|我|来)/,                                        // 好的，我来、好的，我帮您
-        /(好的|好的嘞|好的呀|好嘞|好啊)[，, ]?(我来|我帮|我给)/,      // 好的，我来帮您
-        /(没问题|没问题呀)[，, ]?(我来|我帮|我给)/,                   // 没问题，我来帮你
-        /(好的|好的)[，, ]?(我|让我)[帮|给]/,                          // 好的，我帮您
-        /(那我们|我们)[，, ]?(先|来)/,                                 // 那我们先、我们来
-        /(好的|好)[，, ]?(那|就先)/,                                   // 好的，那先、就先
-        /(行|行吧|好的)[，, ]?(我|让我)/,                              // 行吧，我来
-        /(嗯|嗯嗯)[，, ]?(我|让我|我来)/,                              // 嗯，我来
-        /(OK|ok|Okay|okay)[，, ]?(我|让我)/,                          // OK，我来
-        /(明白|懂了)[，, ]?(我|让我|我来)/,                            // 明白，我来
-        /(收到|收到)[，, ]?(我|让我|我来)/,                            // 收到，我来
+        // === 强信号：明确表达还有后续操作 ===
+        /(接下来|然后).{0,6}(我会|我将|需要).{0,6}(使用|执行|调用|查询|获取|访问)/,
+        /(现在|下面).{0,6}(让我|我来).{0,10}(重新|继续|再)/,
+        /(需要|还要|还有).{0,6}(再|继续|额外).{0,6}(执行|查询|获取|检查|操作)/,
+        /继续.{0,4}(执行|查询|搜索|获取|尝试)/,
+        /再.{0,4}(查一下|尝试一次|执行一次)/,
+        /(第一).{0,4}(步|个).{0,10}(然后|接着|接下来).{0,4}(第二|第三|再|继续)/,  // 多步骤指示
+        // 浏览器/MCP 工具操作
+        /(让我|我来).{0,10}(使用|调用|打开|访问|点击|选择|滚动|输入|提交)/,
+        /(使用|通过).{0,10}(工具|浏览器|MCP).{0,10}(查询|访问|获取|打开)/,
+        // 需要 AI 继续执行的动作
+        /(查询|搜索|获取).{0,10}(信息|数据|结果|推荐|详情|内容)/,
     ];
 
+
+    // ============================================================================
     // 总结暗示模式
     private static readonly SUMMARY_PATTERNS: RegExp[] = [
         // 中文模式

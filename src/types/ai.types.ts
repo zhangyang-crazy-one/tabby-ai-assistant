@@ -422,11 +422,12 @@ export interface AgentStreamEvent {
 
 // Agent 循环配置
 export interface AgentLoopConfig {
-    maxRounds?: number;           // 最大轮数，默认 15
+    maxRounds?: number;           // 最大轮数，默认 10
     timeoutMs?: number;           // 默认 120000 (2分钟)
     repeatThreshold?: number;     // 默认 3 次
     failureThreshold?: number;    // 默认 2 次
     enableTaskComplete?: boolean; // 默认 true
+    agentLoopEnabled?: boolean;   // Agent 循环开关，默认 true。设为 false 则 AI 只执行一轮（单轮模式），适合简单查询
     onRoundStart?: (round: number) => void;
     onRoundEnd?: (round: number) => void;
     onAgentComplete?: (reason: string, totalRounds: number) => void;
@@ -446,6 +447,7 @@ export type TerminationReason =
     | 'high_failure_rate'  // 连续失败率过高
     | 'timeout'            // 总时间超时
     | 'max_rounds'         // 达到最大轮数（安全保底）
+    | 'loop_disabled'      // Agent 循环已关闭（单轮模式）
     | 'user_cancel';       // 用户取消
 
 // Agent 状态追踪
