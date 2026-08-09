@@ -36,7 +36,7 @@ export class AiConfigProvider extends ConfigProvider {
                 minimax: {
                     apiKey: '',
                     model: 'MiniMax-M2',
-                    baseURL: 'https://api.minimaxi.com/anthropic'
+                    baseURL: 'https://api.minimax.chat/v1'
                 },
                 glm: {
                     apiKey: '',
